@@ -1,9 +1,6 @@
 services:
   new-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: monkeyapi:latest
+    image: ghcr.io/monkey-akira/monkeyapi:latest
     container_name: monkeyapi
     restart: always
     command: --log-dir /app/logs
