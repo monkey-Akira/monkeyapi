@@ -19,11 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
+  Circle,
   CreditCard,
   FileText,
   FlaskConical,
   Key,
   LayoutDashboard,
+  LinkIcon,
   ListTodo,
   MessageSquare,
   Radio,
@@ -33,122 +35,195 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type SidebarData } from '@/components/layout/types'
+import {
+  parseSidebarModulesAdmin,
+  type SidebarItemConfig,
+} from '@/lib/navigation-config'
+import { type NavItem, type SidebarData } from '@/components/layout/types'
+import { useStatus } from './use-status'
 
-/**
- * Root navigation groups for the application sidebar.
- *
- * These are shown when the URL does not match any nested sidebar view
- * registered in `layout/lib/sidebar-view-registry.ts`.
- */
+const ICONS = {
+  Activity,
+  Box,
+  Circle,
+  CreditCard,
+  FileText,
+  FlaskConical,
+  Key,
+  LayoutDashboard,
+  Link: LinkIcon,
+  ListTodo,
+  MessageSquare,
+  Radio,
+  Settings,
+  Ticket,
+  User,
+  Users,
+  Wallet,
+} as const
+
+type BuiltinItemFactory = (item: SidebarItemConfig) => NavItem
+
+const withConfigKey = (
+  section: string,
+  item: SidebarItemConfig,
+  navItem: NavItem
+): NavItem => ({
+  ...navItem,
+  title: item.label,
+  external: item.external,
+  configSection: section,
+  configModule: item.id,
+})
+
+const builtinItemFactories: Record<string, BuiltinItemFactory> = {
+  'chat.playground': (item) =>
+    withConfigKey('chat', item, {
+      title: item.label,
+      url: '/playground',
+      icon: FlaskConical,
+    }),
+  'chat.chat': (item) =>
+    withConfigKey('chat', item, {
+      title: item.label,
+      icon: MessageSquare,
+      type: 'chat-presets',
+    }),
+  'console.overview': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/dashboard/overview',
+      icon: Activity,
+    }),
+  'console.detail': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/dashboard/models',
+      icon: LayoutDashboard,
+      configUrls: ['/dashboard', '/dashboard/overview', '/dashboard/models'],
+    }),
+  'console.token': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/keys',
+      icon: Key,
+    }),
+  'console.log': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/usage-logs/common',
+      icon: FileText,
+    }),
+  'console.midjourney': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/usage-logs/drawing',
+      icon: FileText,
+    }),
+  'console.task': (item) =>
+    withConfigKey('console', item, {
+      title: item.label,
+      url: '/usage-logs/task',
+      activeUrls: ['/usage-logs/drawing'],
+      configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
+      icon: ListTodo,
+    }),
+  'personal.topup': (item) =>
+    withConfigKey('personal', item, {
+      title: item.label,
+      url: '/wallet',
+      icon: Wallet,
+    }),
+  'personal.personal': (item) =>
+    withConfigKey('personal', item, {
+      title: item.label,
+      url: '/profile',
+      icon: User,
+    }),
+  'admin.channel': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/channels',
+      icon: Radio,
+    }),
+  'admin.models': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/models/metadata',
+      icon: Box,
+      configUrls: ['/models', '/models/metadata', '/models/deployments'],
+    }),
+  'admin.user': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/users',
+      icon: Users,
+    }),
+  'admin.redemption': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/redemption-codes',
+      icon: Ticket,
+    }),
+  'admin.subscription': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/subscriptions',
+      icon: CreditCard,
+    }),
+  'admin.setting': (item) =>
+    withConfigKey('admin', item, {
+      title: item.label,
+      url: '/system-settings/site',
+      activeUrls: ['/system-settings'],
+      icon: Settings,
+    }),
+}
+
+function createCustomNavItem(
+  sectionId: string,
+  item: SidebarItemConfig
+): NavItem | null {
+  if (!item.url) return null
+  const Icon = ICONS[item.icon as keyof typeof ICONS] ?? LinkIcon
+
+  return withConfigKey(sectionId, item, {
+    title: item.label,
+    url: item.url,
+    icon: Icon,
+    external: item.external,
+  })
+}
+
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { status } = useStatus()
 
-  return {
-    navGroups: [
-      {
-        id: 'chat',
-        title: t('Chat'),
-        items: [
-          {
-            title: t('Playground'),
-            url: '/playground',
-            icon: FlaskConical,
-          },
-          {
-            title: t('Chat'),
-            icon: MessageSquare,
-            type: 'chat-presets',
-          },
-        ],
-      },
-      {
-        id: 'general',
-        title: t('General'),
-        items: [
-          {
-            title: t('Overview'),
-            url: '/dashboard/overview',
-            icon: Activity,
-          },
-          {
-            title: t('Dashboard'),
-            url: '/dashboard/models',
-            icon: LayoutDashboard,
-          },
-          {
-            title: t('API Keys'),
-            url: '/keys',
-            icon: Key,
-          },
-          {
-            title: t('Usage Logs'),
-            url: '/usage-logs/common',
-            icon: FileText,
-          },
-          {
-            title: t('Task Logs'),
-            url: '/usage-logs/task',
-            activeUrls: ['/usage-logs/drawing'],
-            configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
-            icon: ListTodo,
-          },
-        ],
-      },
-      {
-        id: 'personal',
-        title: t('Personal'),
-        items: [
-          {
-            title: t('Wallet'),
-            url: '/wallet',
-            icon: Wallet,
-          },
-          {
-            title: t('Profile'),
-            url: '/profile',
-            icon: User,
-          },
-        ],
-      },
-      {
-        id: 'admin',
-        title: t('Admin'),
-        items: [
-          {
-            title: t('Channels'),
-            url: '/channels',
-            icon: Radio,
-          },
-          {
-            title: t('Models'),
-            url: '/models/metadata',
-            icon: Box,
-          },
-          {
-            title: t('Users'),
-            url: '/users',
-            icon: Users,
-          },
-          {
-            title: t('Redemption Codes'),
-            url: '/redemption-codes',
-            icon: Ticket,
-          },
-          {
-            title: t('Subscription Management'),
-            url: '/subscriptions',
-            icon: CreditCard,
-          },
-          {
-            title: t('System Settings'),
-            url: '/system-settings/site',
-            activeUrls: ['/system-settings'],
-            icon: Settings,
-          },
-        ],
-      },
-    ],
-  }
+  const config = useMemo(
+    () => parseSidebarModulesAdmin(status?.SidebarModulesAdmin),
+    [status?.SidebarModulesAdmin]
+  )
+
+  return useMemo(
+    () => ({
+      navGroups: config.sections
+        .filter((section) => section.enabled)
+        .map((section) => ({
+          id: section.id,
+          title: t(section.label),
+          items: section.items
+            .filter((item) => item.enabled)
+            .map((item) => {
+              const factory = builtinItemFactories[`${section.id}.${item.id}`]
+              if (factory) return factory(item)
+              return createCustomNavItem(section.id, item)
+            })
+            .filter((item): item is NavItem => Boolean(item)),
+        }))
+        .filter((section) => section.items.length > 0),
+    }),
+    [config, t]
+  )
 }

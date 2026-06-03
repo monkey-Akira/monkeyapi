@@ -16,84 +16,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo } from 'react'
-import * as z from 'zod'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import {
-  SettingsControlChildren,
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsControlGroup,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
+import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import {
   HEADER_NAV_DEFAULT,
-  type HeaderNavModulesConfig,
+  createCustomHeaderItem,
+  isValidNavigationUrl,
+  normalizeNavigationId,
   serializeHeaderNavModules,
+  type HeaderNavItemConfig,
+  type HeaderNavModulesConfig,
 } from './config'
-
-const headerNavSchema = z.object({
-  home: z.boolean(),
-  console: z.boolean(),
-  pricingEnabled: z.boolean(),
-  pricingRequireAuth: z.boolean(),
-  rankingsEnabled: z.boolean(),
-  rankingsRequireAuth: z.boolean(),
-  docs: z.boolean(),
-  about: z.boolean(),
-})
-
-type HeaderNavFormValues = z.infer<typeof headerNavSchema>
 
 type HeaderNavigationSectionProps = {
   config: HeaderNavModulesConfig
   initialSerialized: string
 }
 
-const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
-  home:
-    config.home === undefined ? HEADER_NAV_DEFAULT.home : Boolean(config.home),
-  console:
-    config.console === undefined
-      ? HEADER_NAV_DEFAULT.console
-      : Boolean(config.console),
-  pricingEnabled:
-    config.pricing?.enabled === undefined
-      ? HEADER_NAV_DEFAULT.pricing.enabled
-      : Boolean(config.pricing.enabled),
-  pricingRequireAuth:
-    config.pricing?.requireAuth === undefined
-      ? HEADER_NAV_DEFAULT.pricing.requireAuth
-      : Boolean(config.pricing.requireAuth),
-  rankingsEnabled:
-    config.rankings?.enabled === undefined
-      ? HEADER_NAV_DEFAULT.rankings.enabled
-      : Boolean(config.rankings.enabled),
-  rankingsRequireAuth:
-    config.rankings?.requireAuth === undefined
-      ? HEADER_NAV_DEFAULT.rankings.requireAuth
-      : Boolean(config.rankings.requireAuth),
-  docs:
-    config.docs === undefined ? HEADER_NAV_DEFAULT.docs : Boolean(config.docs),
-  about:
-    config.about === undefined
-      ? HEADER_NAV_DEFAULT.about
-      : Boolean(config.about),
-})
+function normalizeItems(items: HeaderNavItemConfig[]): HeaderNavItemConfig[] {
+  return items.map((item, index) => ({
+    ...item,
+    id: item.kind === 'builtin' ? item.id : normalizeNavigationId(item.id),
+    order: index,
+  }))
+}
 
 export function HeaderNavigationSection({
   config,
@@ -101,40 +59,83 @@ export function HeaderNavigationSection({
 }: HeaderNavigationSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const formDefaults = useMemo(() => toFormValues(config), [config])
-
-  const form = useForm<HeaderNavFormValues>({
-    resolver: zodResolver(headerNavSchema),
-    defaultValues: formDefaults,
-  })
+  const user = useAuthStore((state) => state.auth.user)
+  const canEdit = user?.role === ROLE.SUPER_ADMIN
+  const formDefaults = useMemo(() => config.items, [config])
+  const [items, setItems] = useState<HeaderNavItemConfig[]>(formDefaults)
 
   useEffect(() => {
-    form.reset(formDefaults)
-  }, [formDefaults, form])
+    setItems(formDefaults)
+  }, [formDefaults])
 
-  const onSubmit = async (values: HeaderNavFormValues) => {
-    const payload: HeaderNavModulesConfig = {
-      ...config,
-      home: values.home,
-      console: values.console,
-      docs: values.docs,
-      about: values.about,
-      pricing: {
-        ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
-        enabled: values.pricingEnabled,
-        requireAuth: values.pricingRequireAuth,
-      },
-      rankings: {
-        ...(config.rankings ?? HEADER_NAV_DEFAULT.rankings),
-        enabled: values.rankingsEnabled,
-        requireAuth: values.rankingsRequireAuth,
-      },
+  const updateItem = (
+    index: number,
+    patch: Partial<HeaderNavItemConfig>
+  ) => {
+    setItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    )
+  }
+
+  const moveItem = (index: number, direction: -1 | 1) => {
+    setItems((prev) => {
+      const target = index + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      const [item] = next.splice(index, 1)
+      next.splice(target, 0, item)
+      return normalizeItems(next)
+    })
+  }
+
+  const addItem = () => {
+    if (!canEdit) return
+    setItems((prev) => [...prev, createCustomHeaderItem(prev.length)])
+  }
+
+  const deleteItem = (index: number) => {
+    if (!canEdit) return
+    setItems((prev) => normalizeItems(prev.filter((_, i) => i !== index)))
+  }
+
+  const validateItems = (nextItems: HeaderNavItemConfig[]) => {
+    const ids = new Set<string>()
+
+    for (const item of nextItems) {
+      if (!item.label.trim()) {
+        toast.error(t('Name cannot be empty'))
+        return false
+      }
+      if (!item.href.trim() || !isValidNavigationUrl(item.href)) {
+        toast.error(t('Please enter a valid URL'))
+        return false
+      }
+
+      const id = item.kind === 'builtin' ? item.id : normalizeNavigationId(item.id)
+      if (!id) {
+        toast.error(t('ID cannot be empty'))
+        return false
+      }
+      if (ids.has(id)) {
+        toast.error(t('ID already exists'))
+        return false
+      }
+      ids.add(id)
     }
 
-    const serialized = serializeHeaderNavModules(payload)
-    if (serialized === initialSerialized) {
-      return
-    }
+    return true
+  }
+
+  const onSubmit = async () => {
+    if (!canEdit) return
+
+    const nextItems = normalizeItems(items)
+    if (!validateItems(nextItems)) return
+
+    const serialized = serializeHeaderNavModules({ items: nextItems })
+    if (serialized === initialSerialized) return
 
     await updateOption.mutateAsync({
       key: 'HeaderNavModules',
@@ -143,157 +144,178 @@ export function HeaderNavigationSection({
   }
 
   const resetToDefault = () => {
-    form.reset(toFormValues(HEADER_NAV_DEFAULT))
+    if (!canEdit) return
+    setItems(HEADER_NAV_DEFAULT.items)
   }
-
-  const simpleModules: Array<{
-    key: keyof HeaderNavFormValues
-    title: string
-    description: string
-  }> = [
-    {
-      key: 'home',
-      title: t('Home'),
-      description: t('Landing page with system overview.'),
-    },
-    {
-      key: 'console',
-      title: t('Console'),
-      description: t('User dashboard and quota controls.'),
-    },
-    {
-      key: 'docs',
-      title: t('Docs'),
-      description: t('Documentation or external knowledge base.'),
-    },
-    {
-      key: 'about',
-      title: t('About'),
-      description: t('Static page describing the platform.'),
-    },
-  ]
-
-  const accessModules: Array<{
-    enabledKey: keyof HeaderNavFormValues
-    requireAuthKey: keyof HeaderNavFormValues
-    requireAuthDependsOn: 'pricingEnabled' | 'rankingsEnabled'
-    title: string
-    description: string
-    requireAuthTitle: string
-    requireAuthDescription: string
-  }> = [
-    {
-      enabledKey: 'pricingEnabled',
-      requireAuthKey: 'pricingRequireAuth',
-      requireAuthDependsOn: 'pricingEnabled',
-      title: t('Model Square'),
-      description: t('Public model catalog and pricing page.'),
-      requireAuthTitle: t('Require login to view models'),
-      requireAuthDescription: t(
-        'Visitors must authenticate before accessing the pricing directory.'
-      ),
-    },
-    {
-      enabledKey: 'rankingsEnabled',
-      requireAuthKey: 'rankingsRequireAuth',
-      requireAuthDependsOn: 'rankingsEnabled',
-      title: t('Rankings'),
-      description: t('Public rankings page based on live usage data.'),
-      requireAuthTitle: t('Require login to view rankings'),
-      requireAuthDescription: t(
-        'Visitors must authenticate before accessing the rankings page.'
-      ),
-    },
-  ]
 
   return (
     <SettingsSection title={t('Header navigation')}>
-      <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            onReset={resetToDefault}
-            isSaving={updateOption.isPending}
-            resetLabel='Reset to default'
-            saveLabel='Save navigation'
-          />
-          <div className='grid gap-4 md:grid-cols-2'>
-            {simpleModules.map((module) => (
-              <FormField
-                key={module.key}
-                control={form.control}
-                name={module.key}
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{module.title}</FormLabel>
-                      <FormDescription>{module.description}</FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </SettingsSwitchItem>
-                )}
-              />
-            ))}
-          </div>
+      <SettingsForm
+        onSubmit={(event) => {
+          event.preventDefault()
+          void onSubmit()
+        }}
+      >
+        <SettingsPageFormActions
+          onSave={() => void onSubmit()}
+          onReset={resetToDefault}
+          isSaving={updateOption.isPending}
+          isSaveDisabled={!canEdit}
+          isResetDisabled={!canEdit}
+          resetLabel='Reset to default'
+          saveLabel='Save navigation'
+        />
 
-          <div className='grid gap-4 lg:grid-cols-2'>
-            {accessModules.map((module) => (
-              <SettingsControlGroup key={module.enabledKey}>
-                <FormField
-                  control={form.control}
-                  name={module.enabledKey}
-                  render={({ field }) => (
-                    <SettingsSwitchItem>
-                      <SettingsSwitchContent>
-                        <FormLabel>{module.title}</FormLabel>
-                        <FormDescription>{module.description}</FormDescription>
-                      </SettingsSwitchContent>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </SettingsSwitchItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name={module.requireAuthKey}
-                  render={({ field }) => (
-                    <SettingsControlChildren>
-                      <SettingsSwitchItem className='border-b-0 py-2'>
-                        <SettingsSwitchContent>
-                          <FormLabel>{module.requireAuthTitle}</FormLabel>
-                          <FormDescription>
-                            {module.requireAuthDescription}
-                          </FormDescription>
-                        </SettingsSwitchContent>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            disabled={!form.watch(module.requireAuthDependsOn)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </SettingsSwitchItem>
-                    </SettingsControlChildren>
-                  )}
-                />
-              </SettingsControlGroup>
-            ))}
+        {!canEdit && (
+          <div className='text-muted-foreground rounded-lg border px-3 py-2 text-sm'>
+            {t('Only super administrators can modify this setting.')}
           </div>
-        </SettingsForm>
-      </Form>
+        )}
+
+        <div className='space-y-3'>
+          {items.map((item, index) => {
+            const isBuiltin = item.kind === 'builtin'
+            return (
+              <div
+                key={`${item.id}-${index}`}
+                className='bg-muted/20 rounded-xl border p-3'
+              >
+                <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                  <div className='flex min-w-0 items-center gap-2'>
+                    <span className='truncate text-sm font-medium'>
+                      {item.label || item.id}
+                    </span>
+                    <Badge variant='secondary'>
+                      {isBuiltin ? t('Built-in') : t('Custom')}
+                    </Badge>
+                  </div>
+                  <div className='flex items-center gap-1'>
+                    <Button
+                      type='button'
+                      size='icon-sm'
+                      variant='ghost'
+                      onClick={() => moveItem(index, -1)}
+                      disabled={!canEdit || index === 0}
+                      title={t('Move up')}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      type='button'
+                      size='icon-sm'
+                      variant='ghost'
+                      onClick={() => moveItem(index, 1)}
+                      disabled={!canEdit || index === items.length - 1}
+                      title={t('Move down')}
+                    >
+                      <ArrowDown />
+                    </Button>
+                    {!isBuiltin && (
+                      <Button
+                        type='button'
+                        size='icon-sm'
+                        variant='destructive'
+                        onClick={() => deleteItem(index)}
+                        disabled={!canEdit}
+                        title={t('Delete')}
+                      >
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className='grid gap-3 md:grid-cols-3'>
+                  <label className='space-y-1.5 text-sm'>
+                    <span className='text-muted-foreground'>{t('ID')}</span>
+                    <Input
+                      value={item.id}
+                      disabled={!canEdit || isBuiltin}
+                      onChange={(event) =>
+                        updateItem(index, { id: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className='space-y-1.5 text-sm'>
+                    <span className='text-muted-foreground'>{t('Name')}</span>
+                    <Input
+                      value={item.label}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        updateItem(index, { label: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className='space-y-1.5 text-sm md:col-span-1'>
+                    <span className='text-muted-foreground'>{t('URL')}</span>
+                    <Input
+                      value={item.href}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        updateItem(index, { href: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                  <ToggleRow
+                    label={t('Enabled')}
+                    checked={item.enabled}
+                    disabled={!canEdit}
+                    onCheckedChange={(enabled) => updateItem(index, { enabled })}
+                  />
+                  <ToggleRow
+                    label={t('Require login')}
+                    checked={Boolean(item.requireAuth)}
+                    disabled={!canEdit}
+                    onCheckedChange={(requireAuth) =>
+                      updateItem(index, { requireAuth })
+                    }
+                  />
+                  <ToggleRow
+                    label={t('External link')}
+                    checked={Boolean(item.external)}
+                    disabled={!canEdit}
+                    onCheckedChange={(external) =>
+                      updateItem(index, { external })
+                    }
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <Button
+          type='button'
+          variant='outline'
+          className='w-fit'
+          onClick={addItem}
+          disabled={!canEdit}
+        >
+          <Plus data-icon='inline-start' />
+          {t('Add module')}
+        </Button>
+      </SettingsForm>
     </SettingsSection>
+  )
+}
+
+function ToggleRow(props: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <div className='flex min-h-9 items-center justify-between gap-3 rounded-lg border px-3 py-2'>
+      <span className='truncate text-sm'>{props.label}</span>
+      <Switch
+        checked={props.checked}
+        disabled={props.disabled}
+        onCheckedChange={props.onCheckedChange}
+      />
+    </div>
   )
 }

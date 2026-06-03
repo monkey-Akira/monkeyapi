@@ -16,31 +16,30 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormLabel,
-} from '@/components/ui/form'
+import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import {
-  SettingsControlChildren,
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsControlGroup,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
+import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import {
   SIDEBAR_MODULES_DEFAULT,
-  type SidebarModulesAdminConfig,
+  createCustomSidebarItem,
+  createCustomSidebarSection,
+  isValidNavigationUrl,
+  normalizeNavigationId,
   serializeSidebarModulesAdmin,
+  type SidebarItemConfig,
+  type SidebarModulesAdminConfig,
+  type SidebarSectionConfig,
 } from './config'
 
 type SidebarModulesSectionProps = {
@@ -48,10 +47,23 @@ type SidebarModulesSectionProps = {
   initialSerialized: string
 }
 
-type SidebarFormValues = SidebarModulesAdminConfig
-
-const toTitleCase = (value: string) =>
-  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+function normalizeSections(
+  sections: SidebarSectionConfig[]
+): SidebarSectionConfig[] {
+  return sections.map((section, sectionIndex) => ({
+    ...section,
+    id:
+      section.kind === 'builtin'
+        ? section.id
+        : normalizeNavigationId(section.id),
+    order: sectionIndex,
+    items: section.items.map((item, itemIndex) => ({
+      ...item,
+      id: item.kind === 'builtin' ? item.id : normalizeNavigationId(item.id),
+      order: itemIndex,
+    })),
+  }))
+}
 
 export function SidebarModulesSection({
   config,
@@ -59,114 +71,184 @@ export function SidebarModulesSection({
 }: SidebarModulesSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-
-  const sectionMeta: Record<string, { title: string; description: string }> = {
-    chat: {
-      title: t('Chat area'),
-      description: t('Playground experiments and live conversations.'),
-    },
-    console: {
-      title: t('Console area'),
-      description: t('Dashboards, tokens, and usage analytics.'),
-    },
-    personal: {
-      title: t('Personal area'),
-      description: t('Wallet management and personal preferences.'),
-    },
-    admin: {
-      title: t('Admin area'),
-      description: t('Global configuration and administrative tools.'),
-    },
-  }
-
-  const moduleMeta: Record<
-    string,
-    Record<string, { title: string; description: string }>
-  > = {
-    chat: {
-      playground: {
-        title: t('Playground'),
-        description: t('Experiment with prompts and models in real time.'),
-      },
-      chat: {
-        title: t('Chat'),
-        description: t('Access previous conversations and start new ones.'),
-      },
-    },
-    console: {
-      detail: {
-        title: t('Dashboard'),
-        description: t('Aggregated usage metrics and trend charts.'),
-      },
-      token: {
-        title: t('Token management'),
-        description: t('Create, revoke, and audit API tokens.'),
-      },
-      log: {
-        title: t('Usage logs'),
-        description: t('Detailed request logs for investigations.'),
-      },
-      midjourney: {
-        title: t('Drawing logs'),
-        description: t('History of Midjourney-style image tasks.'),
-      },
-      task: {
-        title: t('Task logs'),
-        description: t('Background job tracker for queued work.'),
-      },
-    },
-    personal: {
-      topup: {
-        title: t('Wallet'),
-        description: t('Top up balance and view billing history.'),
-      },
-      personal: {
-        title: t('Profile'),
-        description: t('Personal settings and profile management.'),
-      },
-    },
-    admin: {
-      channel: {
-        title: t('Channels'),
-        description: t('Configure upstream providers and routing.'),
-      },
-      models: {
-        title: t('Models'),
-        description: t('Manage catalog visibility and pricing.'),
-      },
-      redemption: {
-        title: t('Redeem codes'),
-        description: t('Create and review invite or credit codes.'),
-      },
-      user: {
-        title: t('Users'),
-        description: t('Administer user accounts and roles.'),
-      },
-      setting: {
-        title: t('System settings'),
-        description: t('Advanced platform configuration.'),
-      },
-      subscription: {
-        title: t('Subscription Management'),
-        description: t('Manage subscription plans and pricing.'),
-      },
-    },
-  }
-  const formDefaults = useMemo(() => config, [config])
-
-  const form = useForm<SidebarFormValues>({
-    defaultValues: formDefaults,
-  })
+  const user = useAuthStore((state) => state.auth.user)
+  const canEdit = user?.role === ROLE.SUPER_ADMIN
+  const formDefaults = useMemo(() => config.sections, [config])
+  const [sections, setSections] =
+    useState<SidebarSectionConfig[]>(formDefaults)
 
   useEffect(() => {
-    form.reset(formDefaults)
-  }, [formDefaults, form])
+    setSections(formDefaults)
+  }, [formDefaults])
 
-  const onSubmit = async (values: SidebarFormValues) => {
-    const serialized = serializeSidebarModulesAdmin(values)
-    if (serialized === initialSerialized) {
-      return
+  const updateSection = (
+    sectionIndex: number,
+    patch: Partial<SidebarSectionConfig>
+  ) => {
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === sectionIndex ? { ...section, ...patch } : section
+      )
+    )
+  }
+
+  const updateItem = (
+    sectionIndex: number,
+    itemIndex: number,
+    patch: Partial<SidebarItemConfig>
+  ) => {
+    setSections((prev) =>
+      prev.map((section, index) => {
+        if (index !== sectionIndex) return section
+        return {
+          ...section,
+          items: section.items.map((item, currentItemIndex) =>
+            currentItemIndex === itemIndex ? { ...item, ...patch } : item
+          ),
+        }
+      })
+    )
+  }
+
+  const moveSection = (sectionIndex: number, direction: -1 | 1) => {
+    setSections((prev) => {
+      const target = sectionIndex + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      const [section] = next.splice(sectionIndex, 1)
+      next.splice(target, 0, section)
+      return normalizeSections(next)
+    })
+  }
+
+  const moveItem = (
+    sectionIndex: number,
+    itemIndex: number,
+    direction: -1 | 1
+  ) => {
+    setSections((prev) =>
+      normalizeSections(
+        prev.map((section, index) => {
+          if (index !== sectionIndex) return section
+          const target = itemIndex + direction
+          if (target < 0 || target >= section.items.length) return section
+          const items = [...section.items]
+          const [item] = items.splice(itemIndex, 1)
+          items.splice(target, 0, item)
+          return { ...section, items }
+        })
+      )
+    )
+  }
+
+  const addSection = () => {
+    if (!canEdit) return
+    setSections((prev) => [...prev, createCustomSidebarSection(prev.length)])
+  }
+
+  const addItem = (sectionIndex: number) => {
+    if (!canEdit) return
+    setSections((prev) =>
+      prev.map((section, index) =>
+        index === sectionIndex
+          ? {
+              ...section,
+              items: [
+                ...section.items,
+                createCustomSidebarItem(section.items.length),
+              ],
+            }
+          : section
+      )
+    )
+  }
+
+  const deleteSection = (sectionIndex: number) => {
+    if (!canEdit) return
+    setSections((prev) => normalizeSections(prev.filter((_, i) => i !== sectionIndex)))
+  }
+
+  const deleteItem = (sectionIndex: number, itemIndex: number) => {
+    if (!canEdit) return
+    setSections((prev) =>
+      normalizeSections(
+        prev.map((section, index) =>
+          index === sectionIndex
+            ? {
+                ...section,
+                items: section.items.filter((_, i) => i !== itemIndex),
+              }
+            : section
+        )
+      )
+    )
+  }
+
+  const validateSections = (nextSections: SidebarSectionConfig[]) => {
+    const sectionIds = new Set<string>()
+
+    for (const section of nextSections) {
+      if (!section.label.trim()) {
+        toast.error(t('Name cannot be empty'))
+        return false
+      }
+
+      const sectionId =
+        section.kind === 'builtin'
+          ? section.id
+          : normalizeNavigationId(section.id)
+      if (!sectionId) {
+        toast.error(t('ID cannot be empty'))
+        return false
+      }
+      if (sectionIds.has(sectionId)) {
+        toast.error(t('ID already exists'))
+        return false
+      }
+      sectionIds.add(sectionId)
+
+      const itemIds = new Set<string>()
+      for (const item of section.items) {
+        if (!item.label.trim()) {
+          toast.error(t('Name cannot be empty'))
+          return false
+        }
+        const itemId =
+          item.kind === 'builtin' ? item.id : normalizeNavigationId(item.id)
+        if (!itemId) {
+          toast.error(t('ID cannot be empty'))
+          return false
+        }
+        if (itemIds.has(itemId)) {
+          toast.error(t('ID already exists'))
+          return false
+        }
+        itemIds.add(itemId)
+
+        if (item.url && !isValidNavigationUrl(item.url)) {
+          toast.error(t('Please enter a valid URL'))
+          return false
+        }
+        if (item.kind === 'custom' && !item.url?.trim()) {
+          toast.error(t('Please enter a valid URL'))
+          return false
+        }
+      }
     }
+
+    return true
+  }
+
+  const onSubmit = async () => {
+    if (!canEdit) return
+
+    const nextSections = normalizeSections(sections)
+    if (!validateSections(nextSections)) return
+
+    const serialized = serializeSidebarModulesAdmin({
+      sections: nextSections,
+    })
+    if (serialized === initialSerialized) return
 
     await updateOption.mutateAsync({
       key: 'SidebarModulesAdmin',
@@ -175,96 +257,304 @@ export function SidebarModulesSection({
   }
 
   const resetToDefault = () => {
-    form.reset(SIDEBAR_MODULES_DEFAULT)
+    if (!canEdit) return
+    setSections(SIDEBAR_MODULES_DEFAULT.sections)
   }
-
-  const sections = Object.entries(config)
 
   return (
     <SettingsSection title={t('Sidebar modules')}>
-      <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            onReset={resetToDefault}
-            isSaving={updateOption.isPending}
-            resetLabel='Reset to default'
-            saveLabel='Save sidebar modules'
-          />
-          {sections.map(([sectionKey, sectionConfig]) => {
-            const sectionInfo = sectionMeta[sectionKey] ?? {
-              title: toTitleCase(sectionKey),
-              description: t('Custom sidebar section'),
-            }
-            const modules = Object.entries(sectionConfig).filter(
-              ([moduleKey]) => moduleKey !== 'enabled'
-            )
+      <SettingsForm
+        onSubmit={(event) => {
+          event.preventDefault()
+          void onSubmit()
+        }}
+      >
+        <SettingsPageFormActions
+          onSave={() => void onSubmit()}
+          onReset={resetToDefault}
+          isSaving={updateOption.isPending}
+          isSaveDisabled={!canEdit}
+          isResetDisabled={!canEdit}
+          resetLabel='Reset to default'
+          saveLabel='Save sidebar modules'
+        />
 
+        {!canEdit && (
+          <div className='text-muted-foreground rounded-lg border px-3 py-2 text-sm'>
+            {t('Only super administrators can modify this setting.')}
+          </div>
+        )}
+
+        <div className='space-y-4'>
+          {sections.map((section, sectionIndex) => {
+            const isBuiltinSection = section.kind === 'builtin'
             return (
-              <SettingsControlGroup key={sectionKey}>
-                <FormField
-                  control={form.control}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  name={`${sectionKey}.enabled` as any}
-                  render={({ field }) => (
-                    <SettingsSwitchItem>
-                      <SettingsSwitchContent>
-                        <FormLabel>{sectionInfo.title}</FormLabel>
-                        <FormDescription>
-                          {sectionInfo.description}
-                        </FormDescription>
-                      </SettingsSwitchContent>
-                      <FormControl>
-                        <Switch
-                          checked={Boolean(field.value)}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </SettingsSwitchItem>
-                  )}
-                />
+              <div
+                key={`${section.id}-${sectionIndex}`}
+                className='bg-muted/20 rounded-xl border p-3'
+              >
+                <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                  <div className='flex min-w-0 items-center gap-2'>
+                    <span className='truncate text-sm font-semibold'>
+                      {section.label || section.id}
+                    </span>
+                    <Badge variant='secondary'>
+                      {isBuiltinSection ? t('Built-in') : t('Custom')}
+                    </Badge>
+                  </div>
+                  <div className='flex items-center gap-1'>
+                    <Button
+                      type='button'
+                      size='icon-sm'
+                      variant='ghost'
+                      onClick={() => moveSection(sectionIndex, -1)}
+                      disabled={!canEdit || sectionIndex === 0}
+                      title={t('Move up')}
+                    >
+                      <ArrowUp />
+                    </Button>
+                    <Button
+                      type='button'
+                      size='icon-sm'
+                      variant='ghost'
+                      onClick={() => moveSection(sectionIndex, 1)}
+                      disabled={!canEdit || sectionIndex === sections.length - 1}
+                      title={t('Move down')}
+                    >
+                      <ArrowDown />
+                    </Button>
+                    {!isBuiltinSection && (
+                      <Button
+                        type='button'
+                        size='icon-sm'
+                        variant='destructive'
+                        onClick={() => deleteSection(sectionIndex)}
+                        disabled={!canEdit}
+                        title={t('Delete')}
+                      >
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </div>
+                </div>
 
-                <SettingsControlChildren className='grid gap-3 md:grid-cols-2'>
-                  {modules.map(([moduleKey]) => {
-                    const moduleInfo = moduleMeta[sectionKey]?.[moduleKey] ?? {
-                      title: toTitleCase(moduleKey),
-                      description: t('Custom module'),
+                <div className='grid gap-3 md:grid-cols-[1fr_1fr_auto]'>
+                  <label className='space-y-1.5 text-sm'>
+                    <span className='text-muted-foreground'>{t('ID')}</span>
+                    <Input
+                      value={section.id}
+                      disabled={!canEdit || isBuiltinSection}
+                      onChange={(event) =>
+                        updateSection(sectionIndex, { id: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className='space-y-1.5 text-sm'>
+                    <span className='text-muted-foreground'>{t('Name')}</span>
+                    <Input
+                      value={section.label}
+                      disabled={!canEdit}
+                      onChange={(event) =>
+                        updateSection(sectionIndex, {
+                          label: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <ToggleRow
+                    label={t('Enabled')}
+                    checked={section.enabled}
+                    disabled={!canEdit}
+                    onCheckedChange={(enabled) =>
+                      updateSection(sectionIndex, { enabled })
                     }
+                  />
+                </div>
+
+                <div className='mt-4 space-y-3 border-l pl-3'>
+                  {section.items.map((item, itemIndex) => {
+                    const isBuiltinItem = item.kind === 'builtin'
                     return (
-                      <FormField
-                        key={`${sectionKey}.${moduleKey}`}
-                        control={form.control}
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        name={`${sectionKey}.${moduleKey}` as any}
-                        render={({ field }) => (
-                          <SettingsSwitchItem className='border-b-0 py-2'>
-                            <SettingsSwitchContent>
-                              <FormLabel>{moduleInfo.title}</FormLabel>
-                              <FormDescription>
-                                {moduleInfo.description}
-                              </FormDescription>
-                            </SettingsSwitchContent>
-                            <FormControl>
-                              <Switch
-                                checked={Boolean(field.value)}
-                                onCheckedChange={field.onChange}
-                                disabled={
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  !form.watch(`${sectionKey}.enabled` as any)
+                      <div
+                        key={`${section.id}.${item.id}-${itemIndex}`}
+                        className='rounded-lg border bg-background/60 p-3'
+                      >
+                        <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                          <div className='flex min-w-0 items-center gap-2'>
+                            <span className='truncate text-sm font-medium'>
+                              {item.label || item.id}
+                            </span>
+                            <Badge variant='outline'>
+                              {isBuiltinItem ? t('Built-in') : t('Custom')}
+                            </Badge>
+                          </div>
+                          <div className='flex items-center gap-1'>
+                            <Button
+                              type='button'
+                              size='icon-sm'
+                              variant='ghost'
+                              onClick={() => moveItem(sectionIndex, itemIndex, -1)}
+                              disabled={!canEdit || itemIndex === 0}
+                              title={t('Move up')}
+                            >
+                              <ArrowUp />
+                            </Button>
+                            <Button
+                              type='button'
+                              size='icon-sm'
+                              variant='ghost'
+                              onClick={() => moveItem(sectionIndex, itemIndex, 1)}
+                              disabled={
+                                !canEdit ||
+                                itemIndex === section.items.length - 1
+                              }
+                              title={t('Move down')}
+                            >
+                              <ArrowDown />
+                            </Button>
+                            {!isBuiltinItem && (
+                              <Button
+                                type='button'
+                                size='icon-sm'
+                                variant='destructive'
+                                onClick={() =>
+                                  deleteItem(sectionIndex, itemIndex)
                                 }
-                              />
-                            </FormControl>
-                          </SettingsSwitchItem>
-                        )}
-                      />
+                                disabled={!canEdit}
+                                title={t('Delete')}
+                              >
+                                <Trash2 />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className='grid gap-3 md:grid-cols-4'>
+                          <label className='space-y-1.5 text-sm'>
+                            <span className='text-muted-foreground'>
+                              {t('ID')}
+                            </span>
+                            <Input
+                              value={item.id}
+                              disabled={!canEdit || isBuiltinItem}
+                              onChange={(event) =>
+                                updateItem(sectionIndex, itemIndex, {
+                                  id: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label className='space-y-1.5 text-sm'>
+                            <span className='text-muted-foreground'>
+                              {t('Name')}
+                            </span>
+                            <Input
+                              value={item.label}
+                              disabled={!canEdit}
+                              onChange={(event) =>
+                                updateItem(sectionIndex, itemIndex, {
+                                  label: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label className='space-y-1.5 text-sm'>
+                            <span className='text-muted-foreground'>
+                              {t('URL')}
+                            </span>
+                            <Input
+                              value={item.url ?? ''}
+                              disabled={!canEdit}
+                              onChange={(event) =>
+                                updateItem(sectionIndex, itemIndex, {
+                                  url: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                          <label className='space-y-1.5 text-sm'>
+                            <span className='text-muted-foreground'>
+                              {t('Icon')}
+                            </span>
+                            <Input
+                              value={item.icon ?? ''}
+                              disabled={!canEdit}
+                              placeholder='Link'
+                              onChange={(event) =>
+                                updateItem(sectionIndex, itemIndex, {
+                                  icon: event.target.value,
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                          <ToggleRow
+                            label={t('Enabled')}
+                            checked={item.enabled}
+                            disabled={!canEdit || !section.enabled}
+                            onCheckedChange={(enabled) =>
+                              updateItem(sectionIndex, itemIndex, { enabled })
+                            }
+                          />
+                          <ToggleRow
+                            label={t('External link')}
+                            checked={Boolean(item.external)}
+                            disabled={!canEdit}
+                            onCheckedChange={(external) =>
+                              updateItem(sectionIndex, itemIndex, { external })
+                            }
+                          />
+                        </div>
+                      </div>
                     )
                   })}
-                </SettingsControlChildren>
-              </SettingsControlGroup>
+
+                  <Button
+                    type='button'
+                    variant='outline'
+                    onClick={() => addItem(sectionIndex)}
+                    disabled={!canEdit}
+                  >
+                    <Plus data-icon='inline-start' />
+                    {t('Add module')}
+                  </Button>
+                </div>
+              </div>
             )
           })}
-        </SettingsForm>
-      </Form>
+        </div>
+
+        <Button
+          type='button'
+          variant='outline'
+          className='w-fit'
+          onClick={addSection}
+          disabled={!canEdit}
+        >
+          <Plus data-icon='inline-start' />
+          {t('Add section')}
+        </Button>
+      </SettingsForm>
     </SettingsSection>
+  )
+}
+
+function ToggleRow(props: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <div className='flex min-h-9 items-center justify-between gap-3 rounded-lg border px-3 py-2'>
+      <span className='truncate text-sm'>{props.label}</span>
+      <Switch
+        checked={props.checked}
+        disabled={props.disabled}
+        onCheckedChange={props.onCheckedChange}
+      />
+    </div>
   )
 }
