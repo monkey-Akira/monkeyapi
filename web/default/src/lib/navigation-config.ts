@@ -22,6 +22,7 @@ export type NavItemKind = 'builtin' | 'custom'
 export type HeaderNavItemConfig = {
   id: string
   label: string
+  labelKey?: string
   href: string
   enabled: boolean
   requireAuth?: boolean
@@ -37,6 +38,7 @@ export type HeaderNavModulesConfig = {
 export type SidebarItemConfig = {
   id: string
   label: string
+  labelKey?: string
   url?: string
   enabled: boolean
   external?: boolean
@@ -48,6 +50,7 @@ export type SidebarItemConfig = {
 export type SidebarSectionConfig = {
   id: string
   label: string
+  labelKey?: string
   enabled: boolean
   order: number
   kind: NavItemKind
@@ -67,6 +70,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'home',
     label: 'Home',
+    labelKey: 'Home',
     href: '/',
     enabled: true,
     order: 0,
@@ -75,6 +79,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'console',
     label: 'Console',
+    labelKey: 'Console',
     href: '/dashboard',
     enabled: true,
     order: 1,
@@ -83,6 +88,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'pricing',
     label: 'Model Square',
+    labelKey: 'Model Square',
     href: '/pricing',
     enabled: true,
     requireAuth: false,
@@ -92,6 +98,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'rankings',
     label: 'Rankings',
+    labelKey: 'Rankings',
     href: '/rankings',
     enabled: true,
     requireAuth: false,
@@ -101,6 +108,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'docs',
     label: 'Docs',
+    labelKey: 'Docs',
     href: '/docs',
     enabled: true,
     order: 4,
@@ -109,6 +117,7 @@ const BUILTIN_HEADER_ITEMS: HeaderNavItemConfig[] = [
   {
     id: 'about',
     label: 'About',
+    labelKey: 'About',
     href: '/about',
     enabled: true,
     order: 5,
@@ -120,6 +129,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     id: 'chat',
     label: 'Chat',
+    labelKey: 'Chat',
     enabled: true,
     order: 0,
     kind: 'builtin',
@@ -127,6 +137,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'playground',
         label: 'Playground',
+        labelKey: 'Playground',
         url: '/playground',
         enabled: true,
         order: 0,
@@ -135,6 +146,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'chat',
         label: 'Chat',
+        labelKey: 'Chat',
         enabled: true,
         order: 1,
         kind: 'builtin',
@@ -144,6 +156,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     id: 'console',
     label: 'General',
+    labelKey: 'General',
     enabled: true,
     order: 1,
     kind: 'builtin',
@@ -151,6 +164,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'overview',
         label: 'Overview',
+        labelKey: 'Overview',
         url: '/dashboard/overview',
         enabled: true,
         order: 0,
@@ -159,6 +173,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'detail',
         label: 'Dashboard',
+        labelKey: 'Dashboard',
         url: '/dashboard/models',
         enabled: true,
         order: 1,
@@ -167,6 +182,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'token',
         label: 'API Keys',
+        labelKey: 'API Keys',
         url: '/keys',
         enabled: true,
         order: 2,
@@ -175,6 +191,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'log',
         label: 'Usage Logs',
+        labelKey: 'Usage Logs',
         url: '/usage-logs/common',
         enabled: true,
         order: 3,
@@ -183,6 +200,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'midjourney',
         label: 'Drawing Logs',
+        labelKey: 'Drawing Logs',
         url: '/usage-logs/drawing',
         enabled: true,
         order: 4,
@@ -191,6 +209,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'task',
         label: 'Task Logs',
+        labelKey: 'Task Logs',
         url: '/usage-logs/task',
         enabled: true,
         order: 5,
@@ -201,6 +220,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     id: 'personal',
     label: 'Personal',
+    labelKey: 'Personal',
     enabled: true,
     order: 2,
     kind: 'builtin',
@@ -208,6 +228,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'topup',
         label: 'Wallet',
+        labelKey: 'Wallet',
         url: '/wallet',
         enabled: true,
         order: 0,
@@ -216,6 +237,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'personal',
         label: 'Profile',
+        labelKey: 'Profile',
         url: '/profile',
         enabled: true,
         order: 1,
@@ -226,6 +248,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     id: 'admin',
     label: 'Admin',
+    labelKey: 'Admin',
     enabled: true,
     order: 3,
     kind: 'builtin',
@@ -233,6 +256,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'channel',
         label: 'Channels',
+        labelKey: 'Channels',
         url: '/channels',
         enabled: true,
         order: 0,
@@ -241,6 +265,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'models',
         label: 'Models',
+        labelKey: 'Models',
         url: '/models/metadata',
         enabled: true,
         order: 1,
@@ -249,6 +274,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'user',
         label: 'Users',
+        labelKey: 'Users',
         url: '/users',
         enabled: true,
         order: 2,
@@ -257,6 +283,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'redemption',
         label: 'Redemption Codes',
+        labelKey: 'Redemption Codes',
         url: '/redemption-codes',
         enabled: true,
         order: 3,
@@ -265,6 +292,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'subscription',
         label: 'Subscription Management',
+        labelKey: 'Subscription Management',
         url: '/subscriptions',
         enabled: true,
         order: 4,
@@ -273,6 +301,7 @@ const BUILTIN_SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
       {
         id: 'setting',
         label: 'System Settings',
+        labelKey: 'System Settings',
         url: '/system-settings/site',
         enabled: true,
         order: 5,

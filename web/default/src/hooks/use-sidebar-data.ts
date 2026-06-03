@@ -79,9 +79,9 @@ const withConfigKey = (
 })
 
 const getDisplayTitle = (
-  item: Pick<SidebarItemConfig, 'kind' | 'label'>,
+  item: Pick<SidebarItemConfig, 'kind' | 'label' | 'labelKey'>,
   t: (key: string) => string
-) => (item.kind === 'builtin' ? t(item.label) : item.label)
+) => (item.kind === 'builtin' ? t(item.labelKey ?? item.label) : item.label)
 
 const builtinItemFactories: Record<string, BuiltinItemFactory> = {
   'chat.playground': (item) =>

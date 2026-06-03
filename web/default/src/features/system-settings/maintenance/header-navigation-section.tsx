@@ -54,11 +54,11 @@ function normalizeItems(items: HeaderNavItemConfig[]): HeaderNavItemConfig[] {
 }
 
 function displayName(
-  item: Pick<HeaderNavItemConfig, 'kind' | 'label' | 'id'>,
+  item: Pick<HeaderNavItemConfig, 'kind' | 'label' | 'labelKey' | 'id'>,
   t: (key: string) => string
 ) {
   const label = item.label || item.id
-  return item.kind === 'builtin' ? t(label) : label
+  return item.kind === 'builtin' ? t(item.labelKey ?? label) : label
 }
 
 export function HeaderNavigationSection({

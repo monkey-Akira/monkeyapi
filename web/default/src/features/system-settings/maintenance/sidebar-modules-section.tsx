@@ -66,11 +66,14 @@ function normalizeSections(
 }
 
 function displayName(
-  item: Pick<SidebarSectionConfig | SidebarItemConfig, 'kind' | 'label' | 'id'>,
+  item: Pick<
+    SidebarSectionConfig | SidebarItemConfig,
+    'kind' | 'label' | 'labelKey' | 'id'
+  >,
   t: (key: string) => string
 ) {
   const label = item.label || item.id
-  return item.kind === 'builtin' ? t(label) : label
+  return item.kind === 'builtin' ? t(item.labelKey ?? label) : label
 }
 
 export function SidebarModulesSection({

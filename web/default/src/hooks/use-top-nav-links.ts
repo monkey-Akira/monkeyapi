@@ -60,7 +60,8 @@ export function useTopNavLinks(): TopNavLink[] {
         item.external || href.startsWith('http://') || href.startsWith('https://')
 
       return {
-        title: item.kind === 'builtin' ? t(item.label) : item.label,
+        title:
+          item.kind === 'builtin' ? t(item.labelKey ?? item.label) : item.label,
         href,
         external,
         requiresAuth: Boolean(item.requireAuth && !isAuthed),
