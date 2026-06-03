@@ -207,6 +207,11 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	errorCode := string(e.errorCode)
+	if result.Code != nil {
+		errorCode = fmt.Sprintf("%v", result.Code)
+	}
+	result.Message = common.ApplyCustomErrorMessage(errorCode, result.Message)
 	return result
 }
 
@@ -236,6 +241,7 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	result.Message = common.ApplyCustomErrorMessage(string(e.errorCode), result.Message)
 	return result
 }
 

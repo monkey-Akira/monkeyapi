@@ -295,6 +295,25 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "error_message_setting.mappings":
+		var mappings map[string]string
+		err = common.UnmarshalJsonStr(option.Value.(string), &mappings)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "错误文案映射必须是 JSON 对象",
+			})
+			return
+		}
+		for code, message := range mappings {
+			if strings.TrimSpace(code) == "" || strings.TrimSpace(message) == "" {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": "错误码和返回文案不能为空",
+				})
+				return
+			}
+		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {
