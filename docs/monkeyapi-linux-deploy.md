@@ -1,140 +1,138 @@
-# MonkeyAPI Linux 服务器部署与更新文档
+# MonkeyAPI Linux 服务器部署与更新说明
 
-本文档适用于把 `https://github.com/monkey-Akira/monkeyapi.git` 部署到 Linux 服务器，并在之后从 GitHub 拉取更新。
-
-项目已经自带生产用 `docker-compose.prod.yml` 和 `.env.production.example`，不需要再手动编写 Docker Compose 文件。
-
-## 1. 服务器准备
-
-推荐系统：Ubuntu 22.04/24.04 或 Debian 12。
-
-开放端口：
-
-- `22`：SSH
-- `80`：HTTP
-- `443`：HTTPS
-
-登录服务器：
-
-```bash
-ssh root@你的服务器IP
-```
-
-安装基础工具：
-
-```bash
-apt update
-apt upgrade -y
-apt install -y git curl wget vim nano ca-certificates gnupg lsb-release ufw openssl
-```
-
-配置防火墙：
-
-```bash
-ufw allow OpenSSH
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw enable
-ufw status
-```
-
-## 2. 安装 Docker 和 Docker Compose
-
-Ubuntu/Debian 推荐使用 Docker 官方源：
-
-```bash
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
-
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
-  > /etc/apt/sources.list.d/docker.list
-
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-```
-
-如果是 Debian，把上面命令中的 `https://download.docker.com/linux/ubuntu` 改成：
+本文档适用于仓库：
 
 ```text
-https://download.docker.com/linux/debian
+https://github.com/monkey-Akira/monkeyapi.git
 ```
 
-验证：
+当前推荐部署方式：
 
-```bash
-docker --version
-docker compose version
-systemctl enable docker
-systemctl status docker
+1. 代码推送到 GitHub。
+2. GitHub Actions 自动构建 Docker 镜像。
+3. 服务器只拉取镜像并启动容器。
+
+服务器不要再执行 `--build`。`--build` 会让服务器本地编译前端和后端，4G 内存机器容易卡死或被系统 kill。
+
+## 1. GitHub 镜像构建
+
+仓库已经包含 workflow：
+
+```text
+.github/workflows/docker-image-main.yml
 ```
 
-## 3. 拉取项目代码
+每次推送 `main` 分支后，GitHub 会自动构建镜像：
 
-建议放在 `/opt/monkeyapi`：
+```text
+ghcr.io/monkey-akira/monkeyapi:latest
+```
+
+你可以在 GitHub 仓库页面查看：
+
+```text
+Actions -> Publish Docker image (main)
+```
+
+只有 Actions 变成绿色成功后，服务器才能拉到最新镜像。
+
+如果 GHCR package 不是公开的，服务器需要先登录一次：
 
 ```bash
-mkdir -p /opt
-cd /opt
+docker login ghcr.io
+```
+
+用户名填 GitHub 用户名，密码填 GitHub Personal Access Token。更简单的方式是把 package 设置成 Public。
+
+## 2. 首次拉取代码
+
+建议放在 `/monkey/opt/monkeyapi`：
+
+```bash
+mkdir -p /monkey/opt
+cd /monkey/opt
 git clone https://github.com/monkey-Akira/monkeyapi.git
-cd /opt/monkeyapi
+cd /monkey/opt/monkeyapi
 ```
 
-确认分支和版本：
+确认当前代码：
 
 ```bash
 git branch
 git log --oneline -5
 ```
 
-## 4. 配置生产环境变量
+## 3. 配置环境变量
 
-项目已经自带 `docker-compose.prod.yml`，只需要复制环境变量模板：
+只需要使用 `.env.production`，不要改 `.env.example`。
 
 ```bash
-cd /opt/monkeyapi
+cd /monkey/opt/monkeyapi
 cp .env.production.example .env.production
 nano .env.production
 ```
 
-至少修改这些值：
+没有域名、先通过宝塔或 Nginx 反代时，可以这样写：
+
+```env
+FRONTEND_BASE_URL=http://你的服务器IP:3000
+HOST_BIND=127.0.0.1
+APP_PORT=3000
+TZ=Asia/Shanghai
+NODE_NAME=monkeyapi-node-1
+
+POSTGRES_USER=root
+POSTGRES_PASSWORD=MonkeyApi_DB_123456
+POSTGRES_DB=new-api
+
+REDIS_PASSWORD=MonkeyApi_Redis_123456
+SESSION_SECRET=MonkeyApi_Session_1234567890_abcdef
+```
+
+说明：
+
+- `HOST_BIND=127.0.0.1` 表示只允许服务器本机访问 3000 端口，推荐配合宝塔/Nginx 反代。
+- 如果你想临时直接访问 `服务器IP:3000`，改成 `HOST_BIND=0.0.0.0`，同时安全组/防火墙要放行 3000。
+- `POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`SESSION_SECRET` 不能留空。
+- 密码建议只用英文、数字、下划线、短横线和点号。
+- `.env.production` 不要提交到 GitHub。
+
+有域名和 HTTPS 后，再把：
 
 ```env
 FRONTEND_BASE_URL=https://你的域名
-POSTGRES_PASSWORD=改成强密码
-REDIS_PASSWORD=改成强密码
-SESSION_SECRET=改成随机字符串
 ```
 
-生成 `SESSION_SECRET`：
+## 4. 首次启动
+
+先拉镜像，再启动：
 
 ```bash
-openssl rand -hex 32
+cd /monkey/opt/monkeyapi
+docker compose --env-file .env.production -f docker-compose.prod.yml pull
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 ```
 
-密码建议只使用英文字母、数字、下划线、短横线和点号。因为数据库连接串会使用 URL 格式，特殊符号需要 URL 编码，容易写错。
-
-真实的 `.env.production` 已加入 `.gitignore`，不要提交到 GitHub。
-
-## 5. 首次启动
-
-```bash
-cd /opt/monkeyapi
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-```
-
-查看容器：
+查看状态：
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker logs --tail=100 monkeyapi
 ```
 
-查看日志：
+正常状态类似：
 
-```bash
-docker logs -f monkeyapi
+```text
+monkeyapi            Up ... 127.0.0.1:3000->3000/tcp
+monkeyapi-postgres   Up ... healthy
+monkeyapi-redis      Up ... healthy
+```
+
+日志里看到下面内容说明应用已启动：
+
+```text
+New API ... started
+ready in ...
 ```
 
 本机测试：
@@ -143,24 +141,24 @@ docker logs -f monkeyapi
 curl http://127.0.0.1:3000/api/status
 ```
 
-如果返回内容里有 `"success":true`，说明服务已启动。
+返回里有 `"success":true` 就正常。
 
-## 6. 配置 Nginx 反向代理
+## 5. 宝塔或 Nginx 反代
 
-安装 Nginx：
+如果 `.env.production` 使用：
 
-```bash
-apt install -y nginx
-systemctl enable nginx
+```env
+HOST_BIND=127.0.0.1
+APP_PORT=3000
 ```
 
-创建站点配置：
+宝塔反代目标填写：
 
-```bash
-nano /etc/nginx/sites-available/monkeyapi.conf
+```text
+http://127.0.0.1:3000
 ```
 
-写入以下内容，把 `你的域名` 改成真实域名：
+Nginx 示例：
 
 ```nginx
 server {
@@ -188,118 +186,156 @@ server {
 }
 ```
 
-启用站点：
+宝塔配置 HTTPS 后，把 `.env.production` 里的 `FRONTEND_BASE_URL` 改成 HTTPS 域名，然后重启：
 
 ```bash
-ln -s /etc/nginx/sites-available/monkeyapi.conf /etc/nginx/sites-enabled/monkeyapi.conf
-nginx -t
-systemctl reload nginx
-```
-
-浏览器访问：
-
-```text
-http://你的域名
-```
-
-## 7. 配置 HTTPS
-
-安装 Certbot：
-
-```bash
-apt install -y certbot python3-certbot-nginx
-```
-
-申请证书：
-
-```bash
-certbot --nginx -d 你的域名
-```
-
-测试自动续期：
-
-```bash
-certbot renew --dry-run
-```
-
-HTTPS 完成后，把 `/opt/monkeyapi/.env.production` 里的 `FRONTEND_BASE_URL` 改成：
-
-```env
-FRONTEND_BASE_URL=https://你的域名
-```
-
-然后重启应用：
-
-```bash
-cd /opt/monkeyapi
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 ```
 
-## 8. 日常更新
+## 6. 日常更新
 
-每次你在本地修改并推送到 GitHub 后，服务器执行：
+每次代码推送到 GitHub 后，先等 Actions 构建成功。
+
+服务器执行：
 
 ```bash
-cd /opt/monkeyapi
+cd /monkey/opt/monkeyapi
 git pull
+docker compose --env-file .env.production -f docker-compose.prod.yml pull
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
+
+不要执行：
+
+```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-确认状态：
+## 7. 常用命令
+
+查看容器：
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
-docker logs --tail=100 monkeyapi
 ```
 
-## 9. 备份
-
-建议更新前备份数据库卷和本地数据目录：
-
-```bash
-cd /opt/monkeyapi
-mkdir -p /opt/monkeyapi-backup
-docker run --rm -v monkeyapi_pg_data:/volume -v /opt/monkeyapi-backup:/backup alpine \
-  tar czf /backup/pg_data_$(date +%F_%H%M%S).tar.gz -C /volume .
-tar czf /opt/monkeyapi-backup/data_$(date +%F_%H%M%S).tar.gz data logs
-```
-
-## 10. 常用命令
-
-启动或更新：
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-```
-
-停止：
-
-```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml down
-```
-
-查看日志：
+查看应用日志：
 
 ```bash
 docker logs -f monkeyapi
 ```
 
-重启：
+重启应用：
 
 ```bash
 docker restart monkeyapi
 ```
 
-查看占用端口：
+停止整套服务：
 
 ```bash
-ss -lntp | grep 3000
+docker compose --env-file .env.production -f docker-compose.prod.yml down
 ```
 
-## 11. 重要说明
+不要加 `-v`，否则会删除数据库卷。
 
-- 生产部署使用 `docker-compose.prod.yml`，不要再手动写 Compose 文件。
-- `.env.production` 保存真实密码，只放在服务器上，不提交到 GitHub。
-- 项目默认把应用只绑定到 `127.0.0.1:3000`，公网通过 Nginx 访问。
-- 更新代码后需要重新 `up -d --build`，否则 Docker 镜像不会包含最新代码。
-- 如果修改了数据库密码或 Redis 密码，已有容器和数据卷可能需要同步处理，生产环境不要随意改。
+## 8. 常见问题
+
+### 3000 端口被占用
+
+报错：
+
+```text
+Bind for 0.0.0.0:3000 failed: port is already allocated
+```
+
+查看占用：
+
+```bash
+ss -lntp | grep :3000
+docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Ports}}\t{{.Image}}"
+```
+
+如果是旧容器占用，停掉旧容器：
+
+```bash
+docker stop 旧容器名
+docker rm 旧容器名
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
+
+如果 3000 必须给别的服务使用，改 `.env.production`：
+
+```env
+APP_PORT=3001
+```
+
+然后重启：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+```
+
+宝塔反代目标也要改成：
+
+```text
+http://127.0.0.1:3001
+```
+
+### 应用连不上 postgres
+
+报错：
+
+```text
+lookup postgres on 127.0.0.53:53: read: connection refused
+```
+
+先检查网络：
+
+```bash
+docker inspect monkeyapi --format '{{json .NetworkSettings.Networks}}'
+```
+
+如果输出是 `{}`，说明应用容器没有加入 compose 网络。修复：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml stop new-api
+docker rm monkeyapi
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d new-api
+```
+
+再检查：
+
+```bash
+docker inspect monkeyapi --format '{{json .NetworkSettings.Networks}}'
+docker logs --tail=80 monkeyapi
+```
+
+正常应该能看到：
+
+```text
+monkeyapi_monkeyapi-network
+```
+
+### record not found
+
+首次启动时日志里出现：
+
+```text
+record not found
+system is not initialized and no root user exists
+```
+
+这是正常的，表示新数据库还没有初始化管理员账号。打开前台按初始化流程创建管理员即可。
+
+## 9. 备份
+
+更新前建议备份数据库卷和本地数据：
+
+```bash
+cd /monkey/opt/monkeyapi
+mkdir -p /monkey/opt/monkeyapi-backup
+docker run --rm -v monkeyapi_pg_data:/volume -v /monkey/opt/monkeyapi-backup:/backup alpine \
+  tar czf /backup/pg_data_$(date +%F_%H%M%S).tar.gz -C /volume .
+tar czf /monkey/opt/monkeyapi-backup/data_$(date +%F_%H%M%S).tar.gz data logs
+```
