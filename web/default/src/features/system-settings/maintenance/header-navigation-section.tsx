@@ -53,6 +53,14 @@ function normalizeItems(items: HeaderNavItemConfig[]): HeaderNavItemConfig[] {
   }))
 }
 
+function displayName(
+  item: Pick<HeaderNavItemConfig, 'kind' | 'label' | 'id'>,
+  t: (key: string) => string
+) {
+  const label = item.label || item.id
+  return item.kind === 'builtin' ? t(label) : label
+}
+
 export function HeaderNavigationSection({
   config,
   initialSerialized,
@@ -183,7 +191,7 @@ export function HeaderNavigationSection({
                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
                   <div className='flex min-w-0 items-center gap-2'>
                     <span className='truncate text-sm font-medium'>
-                      {item.label || item.id}
+                      {displayName(item, t)}
                     </span>
                     <Badge variant='secondary'>
                       {isBuiltin ? t('Built-in') : t('Custom')}

@@ -78,6 +78,11 @@ const withConfigKey = (
   configModule: item.id,
 })
 
+const getDisplayTitle = (
+  item: Pick<SidebarItemConfig, 'kind' | 'label'>,
+  t: (key: string) => string
+) => (item.kind === 'builtin' ? t(item.label) : item.label)
+
 const builtinItemFactories: Record<string, BuiltinItemFactory> = {
   'chat.playground': (item) =>
     withConfigKey('chat', item, {
@@ -212,13 +217,19 @@ export function useSidebarData(): SidebarData {
         .filter((section) => section.enabled)
         .map((section) => ({
           id: section.id,
-          title: t(section.label),
+          title: getDisplayTitle(section, t),
           items: section.items
             .filter((item) => item.enabled)
             .map((item) => {
               const factory = builtinItemFactories[`${section.id}.${item.id}`]
-              if (factory) return factory(item)
-              return createCustomNavItem(section.id, item)
+              const navItem = factory
+                ? factory(item)
+                : createCustomNavItem(section.id, item)
+              if (!navItem) return null
+              return {
+                ...navItem,
+                title: getDisplayTitle(item, t),
+              }
             })
             .filter((item): item is NavItem => Boolean(item)),
         }))

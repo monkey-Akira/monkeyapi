@@ -65,6 +65,14 @@ function normalizeSections(
   }))
 }
 
+function displayName(
+  item: Pick<SidebarSectionConfig | SidebarItemConfig, 'kind' | 'label' | 'id'>,
+  t: (key: string) => string
+) {
+  const label = item.label || item.id
+  return item.kind === 'builtin' ? t(label) : label
+}
+
 export function SidebarModulesSection({
   config,
   initialSerialized,
@@ -296,7 +304,7 @@ export function SidebarModulesSection({
                 <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
                   <div className='flex min-w-0 items-center gap-2'>
                     <span className='truncate text-sm font-semibold'>
-                      {section.label || section.id}
+                      {displayName(section, t)}
                     </span>
                     <Badge variant='secondary'>
                       {isBuiltinSection ? t('Built-in') : t('Custom')}
@@ -382,7 +390,7 @@ export function SidebarModulesSection({
                         <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
                           <div className='flex min-w-0 items-center gap-2'>
                             <span className='truncate text-sm font-medium'>
-                              {item.label || item.id}
+                              {displayName(item, t)}
                             </span>
                             <Badge variant='outline'>
                               {isBuiltinItem ? t('Built-in') : t('Custom')}
