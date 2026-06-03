@@ -45,6 +45,7 @@ const schema = z.object({
   enabled: z.boolean(),
   minQuota: z.coerce.number().int().min(0),
   maxQuota: z.coerce.number().int().min(0),
+  minPreviousDayRequests: z.coerce.number().int().min(0),
 })
 
 type Values = z.infer<typeof schema>
@@ -56,6 +57,7 @@ export function CheckinSettingsSection({
     enabled: boolean
     minQuota: number
     maxQuota: number
+    minPreviousDayRequests: number
   }
 }) {
   const { t } = useTranslation()
@@ -67,6 +69,7 @@ export function CheckinSettingsSection({
       enabled: defaultValues.enabled,
       minQuota: defaultValues.minQuota,
       maxQuota: defaultValues.maxQuota,
+      minPreviousDayRequests: defaultValues.minPreviousDayRequests,
     },
   })
 
@@ -94,6 +97,15 @@ export function CheckinSettingsSection({
       updates.push({
         key: 'checkin_setting.max_quota',
         value: String(values.maxQuota),
+      })
+    }
+
+    if (
+      values.minPreviousDayRequests !== defaultValues.minPreviousDayRequests
+    ) {
+      updates.push({
+        key: 'checkin_setting.min_previous_day_requests',
+        value: String(values.minPreviousDayRequests),
       })
     }
 
@@ -144,7 +156,7 @@ export function CheckinSettingsSection({
           />
 
           {enabled && (
-            <div className='grid gap-6 sm:grid-cols-2'>
+            <div className='grid gap-6 sm:grid-cols-3'>
               <FormField
                 control={form.control}
                 name='minQuota'
@@ -183,6 +195,32 @@ export function CheckinSettingsSection({
                     </FormControl>
                     <FormDescription>
                       {t('Maximum quota amount awarded for check-in')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='minPreviousDayRequests'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Minimum previous-day requests')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        placeholder={t('0')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Users must reach this many successful calls yesterday before they can check in. Set 0 to disable this requirement.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
