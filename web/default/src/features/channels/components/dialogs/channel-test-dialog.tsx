@@ -441,8 +441,11 @@ export function ChannelTestDialog({
           const isDefault = defaultTestModel === model
 
           return (
-            <div className='flex w-max items-center gap-2 whitespace-nowrap'>
-              <span className='font-medium whitespace-nowrap' title={model}>
+            <div className='flex w-max items-center gap-2 whitespace-nowrap text-[13px] antialiased'>
+              <span
+                className='font-medium whitespace-nowrap text-foreground'
+                title={model}
+              >
                 {model}
               </span>
               {isDefault && (
@@ -485,6 +488,7 @@ export function ChannelTestDialog({
             <Button
               variant='outline'
               size='sm'
+              className='text-[13px] antialiased'
               onClick={() => testSingleModel(model)}
               disabled={isTestingModel || isBatchTesting}
             >
