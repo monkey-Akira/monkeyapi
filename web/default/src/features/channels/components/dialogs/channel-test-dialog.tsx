@@ -534,7 +534,7 @@ export function ChannelTestDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className='max-h-[90vh] overflow-hidden sm:max-w-3xl'>
+        <DialogContent className='top-8 bottom-8 translate-y-0 data-open:zoom-in-100 data-closed:zoom-out-100 max-h-none overflow-hidden sm:max-w-3xl'>
           <DialogHeader>
             <DialogTitle>{t('Test Channel Connection')}</DialogTitle>
             <DialogDescription>
