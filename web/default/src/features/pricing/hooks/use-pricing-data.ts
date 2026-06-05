@@ -21,11 +21,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useStatus } from '@/hooks/use-status'
 import { getPricing } from '../api'
 
-function parsePositiveNumber(value: unknown, fallback: number): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
 function parseRatioList(value: unknown): number[] {
   const source = Array.isArray(value) ? value : []
   return source
@@ -56,10 +51,6 @@ export function usePricingData() {
   const usdExchangeRate = useMemo(
     () => Math.max((status?.usd_exchange_rate as number) ?? priceRate, 0.001),
     [status?.usd_exchange_rate, priceRate]
-  )
-  const pricingDisplayRatioBase = useMemo(
-    () => parsePositiveNumber(status?.pricing_display_ratio_base, 150),
-    [status?.pricing_display_ratio_base]
   )
   const pricingDisplayRatios = useMemo(
     () => parseRatioList(status?.pricing_display_ratios),
@@ -98,7 +89,6 @@ export function usePricingData() {
     refetch,
     priceRate,
     usdExchangeRate,
-    pricingDisplayRatioBase,
     pricingDisplayRatios,
   }
 }

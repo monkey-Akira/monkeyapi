@@ -235,9 +235,9 @@ export function formatGroupPrice(
 export function formatFixedPrice(
   model: PricingModel,
   group: string,
-  showWithRecharge = false,
-  priceRate = 1,
-  usdExchangeRate = 1,
+  _showWithRecharge = false,
+  _priceRate = 1,
+  _usdExchangeRate = 1,
   groupRatio: Record<string, number>
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
@@ -245,14 +245,7 @@ export function formatFixedPrice(
   }
 
   const ratio = groupRatio[group] || 1
-  let priceInUSD = (model.model_price || 0) * ratio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
-    showWithRecharge,
-    priceRate,
-    usdExchangeRate
-  )
+  const priceInUSD = (model.model_price || 0) * ratio
 
   return formatCurrencyFromUSD(priceInUSD, {
     digitsLarge: 4,
@@ -266,9 +259,9 @@ export function formatFixedPrice(
  */
 export function formatRequestPrice(
   model: PricingModel,
-  showWithRecharge = false,
-  priceRate = 1,
-  usdExchangeRate = 1
+  _showWithRecharge = false,
+  _priceRate = 1,
+  _usdExchangeRate = 1
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
     return '-'
@@ -280,14 +273,7 @@ export function formatRequestPrice(
   const groupRatio = model.group_ratio || {}
   const minRatio = getMinGroupRatio(enableGroups, groupRatio)
 
-  let priceInUSD = (model.model_price || 0) * minRatio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
-    showWithRecharge,
-    priceRate,
-    usdExchangeRate
-  )
+  const priceInUSD = (model.model_price || 0) * minRatio
 
   return formatCurrencyFromUSD(priceInUSD, {
     digitsLarge: 4,

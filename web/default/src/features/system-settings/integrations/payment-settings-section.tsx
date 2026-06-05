@@ -115,7 +115,6 @@ const paymentSchema = z.object({
       })
     }
   }),
-  PricingDisplayRatioBase: z.coerce.number().min(0.0001),
   PricingDisplayRatios: z.string().superRefine((value, ctx) => {
     const error = getJsonError(
       value,
@@ -335,7 +334,6 @@ export function PaymentSettingsSection({
       PayMethods: values.PayMethods.trim(),
       AmountOptions: values.AmountOptions.trim(),
       AmountDiscount: values.AmountDiscount.trim(),
-      PricingDisplayRatioBase: values.PricingDisplayRatioBase,
       PricingDisplayRatios: values.PricingDisplayRatios.trim(),
       StripeApiSecret: values.StripeApiSecret.trim(),
       StripeWebhookSecret: values.StripeWebhookSecret.trim(),
@@ -381,7 +379,6 @@ export function PaymentSettingsSection({
       PayMethods: initialRef.current.PayMethods.trim(),
       AmountOptions: initialRef.current.AmountOptions.trim(),
       AmountDiscount: initialRef.current.AmountDiscount.trim(),
-      PricingDisplayRatioBase: initialRef.current.PricingDisplayRatioBase,
       PricingDisplayRatios: initialRef.current.PricingDisplayRatios.trim(),
       StripeApiSecret: initialRef.current.StripeApiSecret.trim(),
       StripeWebhookSecret: initialRef.current.StripeWebhookSecret.trim(),
@@ -471,15 +468,6 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'payment_setting.amount_discount',
         value: sanitized.AmountDiscount,
-      })
-    }
-
-    if (
-      sanitized.PricingDisplayRatioBase !== initial.PricingDisplayRatioBase
-    ) {
-      updates.push({
-        key: 'payment_setting.pricing_display_ratio_base',
-        value: sanitized.PricingDisplayRatioBase,
       })
     }
 
@@ -963,30 +951,6 @@ export function PaymentSettingsSection({
             </div>
 
             <div className='grid gap-6 md:grid-cols-2 md:items-start'>
-              <FormField
-                control={form.control}
-                name='PricingDisplayRatioBase'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Pricing display base ratio')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type='number'
-                        step='0.01'
-                        min={0.0001}
-                        {...safeNumberFieldProps(field)}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Base value used by model square ratio price display'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <FormField
                 control={form.control}
                 name='PricingDisplayRatios'

@@ -226,7 +226,6 @@ export type BillingSettings = {
   PayMethods: string
   'payment_setting.amount_options': string
   'payment_setting.amount_discount': string
-  'payment_setting.pricing_display_ratio_base': number
   'payment_setting.pricing_display_ratios': string
   'payment_setting.compliance_confirmed': boolean
   'payment_setting.compliance_terms_version': string

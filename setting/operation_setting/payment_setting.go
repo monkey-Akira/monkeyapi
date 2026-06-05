@@ -4,7 +4,6 @@ import "github.com/QuantumNous/new-api/setting/config"
 
 type PaymentSetting struct {
 	AmountOptions           []int           `json:"amount_options"`
-	PricingDisplayRatioBase float64         `json:"pricing_display_ratio_base"`
 	PricingDisplayRatios    []float64       `json:"pricing_display_ratios"`
 	AmountDiscount map[int]float64 `json:"amount_discount"` // 充值金额对应的折扣，例如 100 元 0.9 表示 100 元充值享受 9 折优惠
 
@@ -20,7 +19,6 @@ const CurrentComplianceTermsVersion = "v1"
 // 默认配置
 var paymentSetting = PaymentSetting{
 	AmountOptions:           []int{10, 20, 50, 100, 200, 500},
-	PricingDisplayRatioBase: 150,
 	PricingDisplayRatios:    []float64{},
 	AmountDiscount:          map[int]float64{},
 }
