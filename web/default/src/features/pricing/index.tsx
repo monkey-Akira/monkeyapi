@@ -96,7 +96,7 @@ export function Pricing() {
     const ratioOptions = pricingDisplayRatios.map((ratio) => ({
       value: `ratio:${ratio}`,
       label: String(ratio),
-      priceRate: (usdExchangeRate * ratio) / quotaPerUnit,
+      priceRate: (usdExchangeRate * quotaPerUnit) / ratio,
     }))
 
     return [
