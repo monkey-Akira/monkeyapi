@@ -92,6 +92,8 @@ function SectionTitle(props: { children: React.ReactNode }) {
   )
 }
 
+const PRICING_RATIO_QUOTA_BASE = 500000
+
 const CAPABILITY_LABEL_KEYS: Record<ModelCapability, string> = {
   function_calling: 'Function calling',
   streaming: 'Streaming',
@@ -1042,7 +1044,6 @@ export function ModelDetails() {
     isLoading,
     priceRate,
     usdExchangeRate,
-    quotaPerUnit,
     pricingDisplayRatios,
   } = usePricingData()
 
@@ -1059,7 +1060,7 @@ export function ModelDetails() {
     : null
   const activePriceRate =
     activeRatio != null
-      ? (usdExchangeRate * quotaPerUnit) / activeRatio
+      ? (usdExchangeRate * PRICING_RATIO_QUOTA_BASE) / activeRatio
       : priceRate
   const showAdjustedPrice =
     activeRatio != null || priceDisplayMode === RECHARGE_PRICE_MODE

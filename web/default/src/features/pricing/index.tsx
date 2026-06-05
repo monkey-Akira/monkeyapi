@@ -39,6 +39,8 @@ import {
 import { usePricingData } from './hooks/use-pricing-data'
 import type { PriceDisplayOption } from './types'
 
+const PRICING_RATIO_QUOTA_BASE = 500000
+
 export function Pricing() {
   const { t } = useTranslation()
   const [selectedModelName, setSelectedModelName] = useState<string | null>(
@@ -55,7 +57,6 @@ export function Pricing() {
     isLoading,
     priceRate,
     usdExchangeRate,
-    quotaPerUnit,
     pricingDisplayRatios,
   } = usePricingData()
 
@@ -96,7 +97,7 @@ export function Pricing() {
     const ratioOptions = pricingDisplayRatios.map((ratio) => ({
       value: `ratio:${ratio}`,
       label: String(ratio),
-      priceRate: (usdExchangeRate * quotaPerUnit) / ratio,
+      priceRate: (usdExchangeRate * PRICING_RATIO_QUOTA_BASE) / ratio,
     }))
 
     return [
@@ -111,7 +112,6 @@ export function Pricing() {
   }, [
     priceRate,
     pricingDisplayRatios,
-    quotaPerUnit,
     t,
     usdExchangeRate,
   ])
