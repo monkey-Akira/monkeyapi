@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { formatCurrencyFromUSD } from '@/lib/currency'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
 
@@ -187,7 +187,7 @@ export function formatPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
+  return formatBillingCurrencyFromUSD(price, {
     digitsLarge: 4,
     digitsSmall: 6,
     abbreviate: false,
@@ -222,7 +222,7 @@ export function formatGroupPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatCurrencyFromUSD(price, {
+  return formatBillingCurrencyFromUSD(price, {
     digitsLarge: 4,
     digitsSmall: 6,
     abbreviate: false,
@@ -247,7 +247,7 @@ export function formatFixedPrice(
   const ratio = groupRatio[group] || 1
   const priceInUSD = (model.model_price || 0) * ratio
 
-  return formatCurrencyFromUSD(priceInUSD, {
+  return formatBillingCurrencyFromUSD(priceInUSD, {
     digitsLarge: 4,
     digitsSmall: 4,
     abbreviate: false,
@@ -275,7 +275,7 @@ export function formatRequestPrice(
 
   const priceInUSD = (model.model_price || 0) * minRatio
 
-  return formatCurrencyFromUSD(priceInUSD, {
+  return formatBillingCurrencyFromUSD(priceInUSD, {
     digitsLarge: 4,
     digitsSmall: 4,
     abbreviate: false,
