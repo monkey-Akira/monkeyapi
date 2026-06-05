@@ -55,6 +55,7 @@ export function Pricing() {
     isLoading,
     priceRate,
     usdExchangeRate,
+    quotaPerUnit,
     pricingDisplayRatios,
   } = usePricingData()
 
@@ -95,7 +96,7 @@ export function Pricing() {
     const ratioOptions = pricingDisplayRatios.map((ratio) => ({
       value: `ratio:${ratio}`,
       label: String(ratio),
-      priceRate: usdExchangeRate / ratio,
+      priceRate: (usdExchangeRate * ratio) / quotaPerUnit,
     }))
 
     return [
@@ -110,6 +111,7 @@ export function Pricing() {
   }, [
     priceRate,
     pricingDisplayRatios,
+    quotaPerUnit,
     t,
     usdExchangeRate,
   ])

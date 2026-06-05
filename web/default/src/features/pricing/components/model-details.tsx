@@ -1042,6 +1042,7 @@ export function ModelDetails() {
     isLoading,
     priceRate,
     usdExchangeRate,
+    quotaPerUnit,
     pricingDisplayRatios,
   } = usePricingData()
 
@@ -1058,7 +1059,7 @@ export function ModelDetails() {
     : null
   const activePriceRate =
     activeRatio != null
-      ? usdExchangeRate / activeRatio
+      ? (usdExchangeRate * activeRatio) / quotaPerUnit
       : priceRate
   const showAdjustedPrice =
     activeRatio != null || priceDisplayMode === RECHARGE_PRICE_MODE

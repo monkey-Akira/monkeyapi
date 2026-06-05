@@ -52,6 +52,10 @@ export function usePricingData() {
     () => Math.max((status?.usd_exchange_rate as number) ?? priceRate, 0.001),
     [status?.usd_exchange_rate, priceRate]
   )
+  const quotaPerUnit = useMemo(
+    () => Math.max((status?.quota_per_unit as number) ?? 500000, 0.001),
+    [status?.quota_per_unit]
+  )
   const pricingDisplayRatios = useMemo(
     () => parseRatioList(status?.pricing_display_ratios),
     [status?.pricing_display_ratios]
@@ -89,6 +93,7 @@ export function usePricingData() {
     refetch,
     priceRate,
     usdExchangeRate,
+    quotaPerUnit,
     pricingDisplayRatios,
   }
 }
