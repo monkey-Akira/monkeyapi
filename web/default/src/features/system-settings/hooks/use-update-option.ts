@@ -36,6 +36,8 @@ const STATUS_RELATED_KEYS = [
   'general_setting.quota_display_type',
   'general_setting.custom_currency_symbol',
   'general_setting.custom_currency_exchange_rate',
+  'payment_setting.pricing_display_ratio_base',
+  'payment_setting.pricing_display_ratios',
 ]
 
 export function useUpdateOption() {

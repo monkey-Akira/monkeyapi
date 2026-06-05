@@ -52,6 +52,7 @@ import {
   type ViewMode,
 } from '../constants'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
+import type { PriceDisplayOption } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 
 type SegmentOption = {
@@ -68,8 +69,9 @@ export interface PricingToolbarProps {
   onSortChange: (value: string) => void
   tokenUnit: TokenUnit
   onTokenUnitChange: (value: TokenUnit) => void
-  showRechargePrice: boolean
-  onRechargePriceChange: (value: boolean) => void
+  priceDisplayMode: string
+  priceDisplayOptions: PriceDisplayOption[]
+  onPriceDisplayModeChange: (value: string) => void
   viewMode: ViewMode
   onViewModeChange: (value: ViewMode) => void
   quotaTypeFilter: string
@@ -158,8 +160,8 @@ export function PricingToolbar(props: PricingToolbarProps) {
     [props]
   )
 
-  const handleRechargePriceChange = useCallback(
-    (value: string) => props.onRechargePriceChange(value === 'recharge'),
+  const handlePriceDisplayModeChange = useCallback(
+    (value: string) => props.onPriceDisplayModeChange(value),
     [props]
   )
 
@@ -199,12 +201,9 @@ export function PricingToolbar(props: PricingToolbarProps) {
         <div className='flex flex-wrap items-center gap-2'>
           <div className='hidden items-center gap-2 sm:flex'>
             <SegmentedControl
-              options={[
-                { value: 'standard', label: t('Standard') },
-                { value: 'recharge', label: t('Recharge') },
-              ]}
-              value={props.showRechargePrice ? 'recharge' : 'standard'}
-              onChange={handleRechargePriceChange}
+              options={props.priceDisplayOptions}
+              value={props.priceDisplayMode}
+              onChange={handlePriceDisplayModeChange}
               ariaLabel={t('Price display mode')}
             />
             <SegmentedControl

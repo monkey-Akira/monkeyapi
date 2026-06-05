@@ -115,6 +115,21 @@ const paymentSchema = z.object({
       })
     }
   }),
+  PricingDisplayRatioBase: z.coerce.number().min(0.0001),
+  PricingDisplayRatios: z.string().superRefine((value, ctx) => {
+    const error = getJsonError(
+      value,
+      (parsed) =>
+        Array.isArray(parsed) &&
+        parsed.every((item) => Number.isFinite(Number(item)) && Number(item) > 0)
+    )
+    if (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error,
+      })
+    }
+  }),
   StripeApiSecret: z.string(),
   StripeWebhookSecret: z.string(),
   StripePriceId: z.string(),
@@ -242,6 +257,9 @@ export function PaymentSettingsSection({
       PayMethods: formatJsonForEditor(initialFormValues.PayMethods),
       AmountOptions: formatJsonForEditor(initialFormValues.AmountOptions),
       AmountDiscount: formatJsonForEditor(initialFormValues.AmountDiscount),
+      PricingDisplayRatios: formatJsonForEditor(
+        initialFormValues.PricingDisplayRatios
+      ),
       CreemProducts: formatJsonForEditor(initialFormValues.CreemProducts),
     },
   })
@@ -299,6 +317,9 @@ export function PaymentSettingsSection({
       PayMethods: formatJsonForEditor(parsedDefaults.PayMethods),
       AmountOptions: formatJsonForEditor(parsedDefaults.AmountOptions),
       AmountDiscount: formatJsonForEditor(parsedDefaults.AmountDiscount),
+      PricingDisplayRatios: formatJsonForEditor(
+        parsedDefaults.PricingDisplayRatios
+      ),
       CreemProducts: formatJsonForEditor(parsedDefaults.CreemProducts),
     })
   }, [defaultsSignature, form])
@@ -314,6 +335,8 @@ export function PaymentSettingsSection({
       PayMethods: values.PayMethods.trim(),
       AmountOptions: values.AmountOptions.trim(),
       AmountDiscount: values.AmountDiscount.trim(),
+      PricingDisplayRatioBase: values.PricingDisplayRatioBase,
+      PricingDisplayRatios: values.PricingDisplayRatios.trim(),
       StripeApiSecret: values.StripeApiSecret.trim(),
       StripeWebhookSecret: values.StripeWebhookSecret.trim(),
       StripePriceId: values.StripePriceId.trim(),
@@ -358,6 +381,8 @@ export function PaymentSettingsSection({
       PayMethods: initialRef.current.PayMethods.trim(),
       AmountOptions: initialRef.current.AmountOptions.trim(),
       AmountDiscount: initialRef.current.AmountDiscount.trim(),
+      PricingDisplayRatioBase: initialRef.current.PricingDisplayRatioBase,
+      PricingDisplayRatios: initialRef.current.PricingDisplayRatios.trim(),
       StripeApiSecret: initialRef.current.StripeApiSecret.trim(),
       StripeWebhookSecret: initialRef.current.StripeWebhookSecret.trim(),
       StripePriceId: initialRef.current.StripePriceId.trim(),
@@ -446,6 +471,25 @@ export function PaymentSettingsSection({
       updates.push({
         key: 'payment_setting.amount_discount',
         value: sanitized.AmountDiscount,
+      })
+    }
+
+    if (
+      sanitized.PricingDisplayRatioBase !== initial.PricingDisplayRatioBase
+    ) {
+      updates.push({
+        key: 'payment_setting.pricing_display_ratio_base',
+        value: sanitized.PricingDisplayRatioBase,
+      })
+    }
+
+    if (
+      normalizeJsonForComparison(sanitized.PricingDisplayRatios) !==
+      normalizeJsonForComparison(initial.PricingDisplayRatios)
+    ) {
+      updates.push({
+        key: 'payment_setting.pricing_display_ratios',
+        value: sanitized.PricingDisplayRatios,
       })
     }
 
@@ -911,6 +955,58 @@ export function PaymentSettingsSection({
                     </FormControl>
                     <FormDescription>
                       {t('Discount map by recharge amount (JSON object)')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className='grid gap-6 md:grid-cols-2 md:items-start'>
+              <FormField
+                control={form.control}
+                name='PricingDisplayRatioBase'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Pricing display base ratio')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        step='0.01'
+                        min={0.0001}
+                        {...safeNumberFieldProps(field)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Base value used by model square ratio price display'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='PricingDisplayRatios'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Pricing display ratios')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={4}
+                        placeholder='[260, 230, 200]'
+                        {...field}
+                        onChange={(event) =>
+                          field.onChange(event.target.value)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'JSON array of ratios shown in the model square price switcher'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
