@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/stores/auth-store'
 import { SectionPageLayout } from '@/components/layout'
 import { UserRiskAlerts } from './components/user-risk-alerts'
 import { UsersDeleteDialog } from './components/users-delete-dialog'
@@ -24,10 +25,13 @@ import { UsersMutateDrawer } from './components/users-mutate-drawer'
 import { UsersPrimaryButtons } from './components/users-primary-buttons'
 import { UsersProvider, useUsers } from './components/users-provider'
 import { UsersTable } from './components/users-table'
+import { USER_ROLE } from './constants'
 
 function UsersContent() {
   const { t } = useTranslation()
+  const userRole = useAuthStore((state) => state.auth.user?.role)
   const { open, setOpen, currentRow } = useUsers()
+  const isRoot = userRole === USER_ROLE.ROOT
 
   return (
     <>
@@ -38,7 +42,7 @@ function UsersContent() {
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <div className='space-y-4'>
-            <UserRiskAlerts />
+            {isRoot && <UserRiskAlerts />}
             <UsersTable />
           </div>
         </SectionPageLayout.Content>

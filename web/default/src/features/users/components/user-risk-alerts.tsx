@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import {
   Table,
   TableBody,
@@ -42,7 +43,9 @@ import {
 import {
   getUserRiskAlert,
   getUserRiskAlerts,
+  getUserIpRiskAlertOption,
   manageUser,
+  updateUserIpRiskAlertOption,
   updateUserRiskAlertStatus,
 } from '../api'
 import type { RiskAlertStatus } from '../types'
@@ -74,6 +77,17 @@ export function UserRiskAlerts() {
   const { triggerRefresh } = useUsers()
   const [status, setStatus] = useState<RiskAlertStatus | 'all'>('open')
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
+
+  const optionQuery = useQuery({
+    queryKey: ['user-ip-risk-alert-option'],
+    queryFn: async () => {
+      const res = await getUserIpRiskAlertOption()
+      if (!res.success || !res.data) {
+        throw new Error(res.message || t('Failed to load risk alert setting'))
+      }
+      return res.data
+    },
+  })
 
   const alertsQuery = useQuery({
     queryKey: ['user-risk-alerts', status],
@@ -148,9 +162,33 @@ export function UserRiskAlerts() {
     },
   })
 
+  const optionMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await updateUserIpRiskAlertOption(enabled)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to update risk alert setting'))
+      }
+      return enabled
+    },
+    onSuccess: (enabled) => {
+      toast.success(
+        enabled ? t('Risk alerts enabled') : t('Risk alerts disabled')
+      )
+      queryClient.invalidateQueries({
+        queryKey: ['user-ip-risk-alert-option'],
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : t('Operation failed')
+      )
+    },
+  })
+
   const alerts = alertsQuery.data?.items || []
   const total = alertsQuery.data?.total || 0
   const detail = detailQuery.data
+  const riskAlertEnabled = optionQuery.data?.enabled ?? true
 
   return (
     <div className='border-border bg-background rounded-lg border'>
@@ -166,6 +204,20 @@ export function UserRiskAlerts() {
           <Badge variant='outline'>{total}</Badge>
         </div>
         <div className='flex flex-wrap items-center gap-2'>
+          <label className='border-border bg-muted/30 flex h-7 items-center gap-2 rounded-md border px-2 text-xs'>
+            <Switch
+              size='sm'
+              checked={riskAlertEnabled}
+              disabled={optionQuery.isLoading || optionMutation.isPending}
+              onCheckedChange={(checked) =>
+                optionMutation.mutate(Boolean(checked))
+              }
+              aria-label={t('Enable risk alerts')}
+            />
+            <span>
+              {riskAlertEnabled ? t('Alerts enabled') : t('Alerts disabled')}
+            </span>
+          </label>
           {riskStatusOptions.map((option) => (
             <Button
               key={option}

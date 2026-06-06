@@ -145,6 +145,10 @@ export interface UserRiskAlertDetail {
   users: RiskAlertUser[]
 }
 
+export interface UserIpRiskAlertOption {
+  enabled: boolean
+}
+
 export interface SearchUsersParams {
   keyword?: string
   group?: string

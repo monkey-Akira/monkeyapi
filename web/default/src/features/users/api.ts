@@ -30,6 +30,7 @@ import type {
   GetUserRiskAlertsResponse,
   RiskAlertStatus,
   UserRiskAlertDetail,
+  UserIpRiskAlertOption,
 } from './types'
 
 // ============================================================================
@@ -143,6 +144,34 @@ export async function updateUserRiskAlertStatus(
   status: RiskAlertStatus
 ): Promise<ApiResponse> {
   const res = await api.put(`/api/user/risk_alerts/${id}`, { status })
+  return res.data
+}
+
+export async function getUserIpRiskAlertOption(): Promise<
+  ApiResponse<UserIpRiskAlertOption>
+> {
+  const res = await api.get('/api/option/')
+  const options = Array.isArray(res.data?.data) ? res.data.data : []
+  const option = options.find(
+    (item: { key?: string; value?: string }) =>
+      item.key === 'UserIpRiskAlertEnabled'
+  )
+  return {
+    success: Boolean(res.data?.success),
+    message: res.data?.message,
+    data: {
+      enabled: option?.value !== 'false',
+    },
+  }
+}
+
+export async function updateUserIpRiskAlertOption(
+  enabled: boolean
+): Promise<ApiResponse> {
+  const res = await api.put('/api/option/', {
+    key: 'UserIpRiskAlertEnabled',
+    value: enabled,
+  })
   return res.data
 }
 

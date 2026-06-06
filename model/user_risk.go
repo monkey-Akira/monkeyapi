@@ -76,6 +76,9 @@ func RecordUserLoginIp(userId int, ip string) error {
 }
 
 func CheckAndUpsertIpRiskAlert(ip string) error {
+	if !IsUserIpRiskAlertEnabled() {
+		return nil
+	}
 	ip = normalizeUserRiskIp(ip)
 	if ip == "" {
 		return nil
@@ -210,6 +213,16 @@ func UpdateUserRiskAlertStatus(id int, status string) error {
 		"status":     status,
 		"updated_at": common.GetTimestamp(),
 	}).Error
+}
+
+func IsUserIpRiskAlertEnabled() bool {
+	common.OptionMapRWMutex.RLock()
+	value, ok := common.OptionMap["UserIpRiskAlertEnabled"]
+	common.OptionMapRWMutex.RUnlock()
+	if !ok {
+		return true
+	}
+	return value == "true"
 }
 
 func getRiskUserIdsByIp(ip string) ([]int, []int, error) {
