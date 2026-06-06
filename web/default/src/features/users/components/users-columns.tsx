@@ -35,6 +35,7 @@ import { TableId } from '@/components/table-id'
 import { USER_STATUSES, USER_ROLES, isUserDeleted } from '../constants'
 import { type User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import { UserInviteesDialog } from './user-invitees-dialog'
 
 function getQuotaProgressColor(percentage: number): string {
   if (percentage <= 10) return '[&_[data-slot=progress-indicator]]:bg-rose-500'
@@ -273,27 +274,12 @@ export function useUsersColumns(): ColumnDef<User>[] {
       ),
       cell: ({ row }) => {
         const user = row.original
-        const affCount = user.aff_count || 0
         const affHistoryQuota = user.aff_history_quota || 0
         const inviterId = user.inviter_id || 0
 
         return (
           <div className='flex items-center gap-1'>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <StatusBadge
-                    label={`${t('Invited')}: ${affCount}`}
-                    variant='neutral'
-                    copyable={false}
-                    className='cursor-help'
-                  />
-                }
-              />
-              <TooltipContent>
-                <p className='text-xs'>{t('Number of users invited')}</p>
-              </TooltipContent>
-            </Tooltip>
+            <UserInviteesDialog user={user} />
             <Tooltip>
               <TooltipTrigger
                 render={

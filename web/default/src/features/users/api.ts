@@ -21,6 +21,8 @@ import type {
   User,
   GetUsersParams,
   GetUsersResponse,
+  GetUserInviteesParams,
+  GetUserInviteesResponse,
   SearchUsersParams,
   UserFormData,
   ManageUserAction,
@@ -78,6 +80,17 @@ export async function searchUsers(
  */
 export async function getUser(id: number): Promise<ApiResponse<User>> {
   const res = await api.get(`/api/user/${id}`)
+  return res.data
+}
+
+export async function getUserInvitees(
+  id: number,
+  params: GetUserInviteesParams = {}
+): Promise<GetUserInviteesResponse> {
+  const { p = 1, page_size = 20 } = params
+  const res = await api.get(
+    `/api/user/${id}/invitees?p=${p}&page_size=${page_size}`
+  )
   return res.data
 }
 

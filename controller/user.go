@@ -265,6 +265,23 @@ func GetUserRiskAlerts(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+func GetUserInvitees(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	users, total, err := model.GetUsersByInviterId(id, pageInfo)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(users)
+	common.ApiSuccess(c, pageInfo)
+}
+
 func GetUserRiskAlert(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

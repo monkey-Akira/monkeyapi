@@ -227,6 +227,18 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 	return users, total, nil
 }
 
+func GetUsersByInviterId(inviterId int, pageInfo *common.PageInfo) (users []*User, total int64, err error) {
+	query := DB.Unscoped().Model(&User{}).Where("inviter_id = ?", inviterId)
+	if err = query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Omit("password").Find(&users).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int) ([]*User, int64, error) {
 	var users []*User
 	var total int64

@@ -4545,6 +4545,12 @@
     "Risk alerts enabled": "\u98ce\u9669\u544a\u8b66\u5df2\u5f00\u542f",
     "Same register or login IP across multiple accounts": "\u540c\u4e00\u6ce8\u518c\u6216\u767b\u5f55 IP \u5173\u8054\u591a\u4e2a\u8d26\u53f7",
     "Updated At": "\u66f4\u65b0\u65f6\u95f4",
-    "User disabled": "\u7528\u6237\u5df2\u7981\u7528"
+    "User disabled": "\u7528\u6237\u5df2\u7981\u7528",
+    "Failed to load invited users": "\u52a0\u8f7d\u88ab\u9080\u8bf7\u7528\u6237\u5931\u8d25",
+    "Invitation revenue": "\u9080\u8bf7\u6536\u76ca",
+    "Inviter ID": "\u9080\u8bf7\u4eba ID",
+    "No invited users": "\u6682\u65e0\u88ab\u9080\u8bf7\u7528\u6237",
+    "Requests": "\u8bf7\u6c42\u6570",
+    "Total invited users": "\u603b\u9080\u8bf7\u4eba\u6570"
   }
 }

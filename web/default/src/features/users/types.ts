@@ -91,6 +91,13 @@ export interface GetUsersResponse {
   }
 }
 
+export interface GetUserInviteesParams {
+  p?: number
+  page_size?: number
+}
+
+export type GetUserInviteesResponse = GetUsersResponse
+
 export type RiskAlertStatus = 'open' | 'handled' | 'ignored'
 
 export interface UserRiskAlert {
