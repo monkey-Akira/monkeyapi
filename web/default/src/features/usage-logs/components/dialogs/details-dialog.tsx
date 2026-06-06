@@ -31,7 +31,7 @@ import {
   Info,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatBillingCurrencyFromUSD, getCurrencyDisplay } from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -135,6 +135,188 @@ function formatRatio(ratio: number | undefined): string {
   return ratio.toFixed(4)
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function formatFormulaNumber(value: number, digits = 6): string {
+  if (!Number.isFinite(value)) return '-'
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(digits).replace(/\.?0+$/, '')
+}
+
+function formatTokenCount(value: number): string {
+  return String(Math.max(0, Math.round(value)))
+}
+
+function buildBillingProcess(props: {
+  log: UsageLog
+  other: LogOtherData
+  isPerCall: boolean
+  isTieredExpr: boolean
+  fmtPrice: (usd: number) => string
+  ratioLabel: string
+  effectiveGR?: number
+  t: (key: string) => string
+}): React.ReactNode | null {
+  const { log, other, isPerCall, isTieredExpr, fmtPrice, ratioLabel, t } = props
+
+  if (isTieredExpr) return null
+
+  const { config } = getCurrencyDisplay()
+  const quotaPerUnit = config.quotaPerUnit
+  const groupRatio = isFiniteNumber(props.effectiveGR) ? props.effectiveGR : 1
+  const segments: string[] = []
+  let displayAmountUSD = 0
+
+  const addTokenSegment = (label: string, tokens: number, priceUSD: number) => {
+    if (tokens <= 0 || !Number.isFinite(priceUSD)) return
+    segments.push(
+      `${label} ${formatTokenCount(tokens)} tokens / 1M tokens * ${fmtPrice(priceUSD)}`
+    )
+    displayAmountUSD += (tokens / 1000000) * priceUSD
+  }
+
+  const addCallSegment = (
+    label: string,
+    count: number,
+    divisor: number,
+    priceUSD: number,
+    unit: string
+  ) => {
+    if (count <= 0 || divisor <= 0 || !Number.isFinite(priceUSD)) return
+    segments.push(
+      `${label} ${formatTokenCount(count)} ${unit} / ${formatTokenCount(divisor)} ${unit} * ${fmtPrice(priceUSD)}`
+    )
+    displayAmountUSD += (count / divisor) * priceUSD
+  }
+
+  if (isPerCall) {
+    if (!isFiniteNumber(other.model_price)) return null
+    segments.push(`${t('Per-call')} ${fmtPrice(other.model_price)}`)
+    displayAmountUSD += other.model_price
+  } else {
+    if (!isFiniteNumber(other.model_ratio)) return null
+
+    const inputUnitPrice = other.model_ratio * 2.0
+    const completionRatio = isFiniteNumber(other.completion_ratio)
+      ? other.completion_ratio
+      : 0
+    const cacheRatio = isFiniteNumber(other.cache_ratio) ? other.cache_ratio : 1
+    const cacheCreationRatio = isFiniteNumber(other.cache_creation_ratio)
+      ? other.cache_creation_ratio
+      : 1
+    const cacheCreationRatio5m = isFiniteNumber(other.cache_creation_ratio_5m)
+      ? other.cache_creation_ratio_5m
+      : 0
+    const cacheCreationRatio1h = isFiniteNumber(other.cache_creation_ratio_1h)
+      ? other.cache_creation_ratio_1h
+      : 0
+    const cacheTokens = other.cache_tokens || 0
+    const cacheCreationTokens = other.cache_creation_tokens || 0
+    const cacheCreationTokens5m = other.cache_creation_tokens_5m || 0
+    const cacheCreationTokens1h = other.cache_creation_tokens_1h || 0
+    const hasSplitCacheCreation =
+      cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0
+    const imageTokens = other.image ? other.image_output || 0 : 0
+    const audioInputTokens = other.audio_input_seperate_price
+      ? other.audio_input_token_count || 0
+      : 0
+    const cacheCreationBaseTokens = hasSplitCacheCreation
+      ? 0
+      : cacheCreationTokens
+    const isClaudeSemantic =
+      other.claude === true || other.usage_semantic === 'anthropic'
+    const textInputTokens = isClaudeSemantic
+      ? log.prompt_tokens || 0
+      : Math.max(
+          (log.prompt_tokens || 0) -
+            cacheTokens -
+            cacheCreationBaseTokens -
+            cacheCreationTokens5m -
+            cacheCreationTokens1h -
+            imageTokens -
+            audioInputTokens,
+          0
+        )
+
+    addTokenSegment(t('Input'), textInputTokens, inputUnitPrice)
+    addTokenSegment(t('Cache Read'), cacheTokens, inputUnitPrice * cacheRatio)
+    addTokenSegment(
+      t('Cache Creation'),
+      cacheCreationBaseTokens,
+      inputUnitPrice * cacheCreationRatio
+    )
+    addTokenSegment(
+      t('Cache Creation (5m)'),
+      cacheCreationTokens5m,
+      inputUnitPrice * cacheCreationRatio5m
+    )
+    addTokenSegment(
+      t('Cache Creation (1h)'),
+      cacheCreationTokens1h,
+      inputUnitPrice * cacheCreationRatio1h
+    )
+    addTokenSegment(
+      t('Image input'),
+      imageTokens,
+      inputUnitPrice * (isFiniteNumber(other.image_ratio) ? other.image_ratio : 1)
+    )
+    addTokenSegment(
+      t('Audio input'),
+      audioInputTokens,
+      isFiniteNumber(other.audio_input_price)
+        ? other.audio_input_price
+        : inputUnitPrice
+    )
+    addTokenSegment(
+      t('Output'),
+      log.completion_tokens || 0,
+      inputUnitPrice * completionRatio
+    )
+  }
+
+  addCallSegment(
+    t('Web Search'),
+    other.web_search ? other.web_search_call_count || 0 : 0,
+    1000,
+    other.web_search_price || 0,
+    t('times')
+  )
+  addCallSegment(
+    t('File Search'),
+    other.file_search ? other.file_search_call_count || 0 : 0,
+    1000,
+    other.file_search_price || 0,
+    t('times')
+  )
+
+  if (other.image_generation_call && isFiniteNumber(other.image_generation_call_price)) {
+    segments.push(`${t('Image Generation')} ${fmtPrice(other.image_generation_call_price)}`)
+    displayAmountUSD += other.image_generation_call_price
+  }
+
+  if (segments.length === 0) return null
+
+  const estimatedQuota = displayAmountUSD * groupRatio * quotaPerUnit
+  const estimatedText = formatFormulaNumber(estimatedQuota)
+  const actualText = formatFormulaNumber(log.quota, 0)
+  const resultText =
+    Math.round(estimatedQuota) === log.quota
+      ? actualText
+      : `${estimatedText} ≈ ${actualText}`
+  const formula = `(${segments.join(' + ')}) * ${ratioLabel} ${formatFormulaNumber(groupRatio, 4)} * ${formatFormulaNumber(quotaPerUnit, 0)} = ${resultText}`
+
+  return (
+    <>
+      <span className='block'>{formula}</span>
+      <span className='text-muted-foreground mt-1 block'>
+        {t('仅供参考，以实际扣费为准')}
+      </span>
+    </>
+  )
+}
+
 function BillingBreakdown(props: {
   log: UsageLog
   other: LogOtherData
@@ -147,7 +329,7 @@ function BillingBreakdown(props: {
   const isTieredExpr = other.billing_mode === 'tiered_expr'
   const tieredSummary = getTieredBillingSummary(other)
 
-  const rows: Array<{ label: string; value: string }> = []
+  const rows: Array<{ label: string; value: React.ReactNode }> = []
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
   const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
   const baseInputUSD = other.model_ratio != null ? other.model_ratio * 2.0 : 0
@@ -313,6 +495,23 @@ function BillingBreakdown(props: {
     label: t('Total Cost'),
     value: formatLogQuota(log.quota),
   })
+
+  const billingProcess = buildBillingProcess({
+    log,
+    other,
+    isPerCall,
+    isTieredExpr,
+    fmtPrice,
+    ratioLabel: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
+    effectiveGR,
+    t,
+  })
+  if (billingProcess) {
+    rows.push({
+      label: t('Billing Process'),
+      value: billingProcess,
+    })
+  }
 
   if (rows.length === 0) return null
 
