@@ -92,7 +92,11 @@ func Login(c *gin.Context) {
 
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
-	model.UpdateUserLastLoginAt(user.Id)
+	clientIp := c.ClientIP()
+	model.UpdateUserLastLoginInfo(user.Id, clientIp)
+	if err := model.RecordUserLoginIp(user.Id, clientIp); err != nil {
+		common.SysLog(fmt.Sprintf("failed to record user login ip for user %d: %v", user.Id, err))
+	}
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
 	session.Set("username", user.Username)
@@ -181,6 +185,7 @@ func Register(c *gin.Context) {
 		Password:    user.Password,
 		DisplayName: user.Username,
 		InviterId:   inviterId,
+		RegisterIp:  c.ClientIP(),
 		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
 	}
 	if common.EmailVerificationEnabled {
@@ -246,6 +251,57 @@ func GetAllUsers(c *gin.Context) {
 
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+func GetUserRiskAlerts(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	alerts, total, err := model.GetUserRiskAlerts(c.Query("status"), pageInfo)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(alerts)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func GetUserRiskAlert(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	alert, users, err := model.GetUserRiskAlertDetail(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"alert": alert,
+		"users": users,
+	})
+}
+
+type UserRiskAlertStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func UpdateUserRiskAlertStatus(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var req UserRiskAlertStatusRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if err := model.UpdateUserRiskAlertStatus(id, req.Status); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func SearchUsers(c *gin.Context) {
@@ -850,6 +906,7 @@ func CreateUser(c *gin.Context) {
 		Username:    user.Username,
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
+		RegisterIp:  c.ClientIP(),
 		Role:        user.Role, // 保持管理员设置的角色
 	}
 	if err := cleanUser.Insert(0); err != nil {

@@ -26,6 +26,10 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  GetUserRiskAlertsParams,
+  GetUserRiskAlertsResponse,
+  RiskAlertStatus,
+  UserRiskAlertDetail,
 } from './types'
 
 // ============================================================================
@@ -112,6 +116,33 @@ export async function manageUser(
   action: ManageUserAction
 ): Promise<ApiResponse<Partial<User>>> {
   const res = await api.post('/api/user/manage', { id, action })
+  return res.data
+}
+
+export async function getUserRiskAlerts(
+  params: GetUserRiskAlertsParams = {}
+): Promise<GetUserRiskAlertsResponse> {
+  const { status = 'open', p = 1, page_size = 10 } = params
+  const queryParams = new URLSearchParams()
+  queryParams.set('status', status)
+  queryParams.set('p', String(p))
+  queryParams.set('page_size', String(page_size))
+  const res = await api.get(`/api/user/risk_alerts?${queryParams.toString()}`)
+  return res.data
+}
+
+export async function getUserRiskAlert(
+  id: number
+): Promise<ApiResponse<UserRiskAlertDetail>> {
+  const res = await api.get(`/api/user/risk_alerts/${id}`)
+  return res.data
+}
+
+export async function updateUserRiskAlertStatus(
+  id: number,
+  status: RiskAlertStatus
+): Promise<ApiResponse> {
+  const res = await api.put(`/api/user/risk_alerts/${id}`, { status })
   return res.data
 }
 

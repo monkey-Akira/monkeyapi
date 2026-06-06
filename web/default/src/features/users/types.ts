@@ -50,6 +50,8 @@ export const userSchema = z.object({
   aff_history_quota: z.number().optional(),
   inviter_id: z.number().optional(),
   linux_do_id: z.string().optional(),
+  register_ip: z.string().optional(),
+  last_login_ip: z.string().optional(),
   status: userStatusSchema,
   role: userRoleSchema,
   created_at: z.number().optional(),
@@ -87,6 +89,60 @@ export interface GetUsersResponse {
     page: number
     page_size: number
   }
+}
+
+export type RiskAlertStatus = 'open' | 'handled' | 'ignored'
+
+export interface UserRiskAlert {
+  id: number
+  ip: string
+  user_count: number
+  register_count: number
+  login_count: number
+  reason: string
+  status: RiskAlertStatus
+  created_at: number
+  updated_at: number
+}
+
+export interface RiskAlertUser {
+  id: number
+  username: string
+  display_name: string
+  email?: string
+  status: number
+  role: number
+  quota: number
+  used_quota: number
+  request_count: number
+  register_ip?: string
+  last_login_ip?: string
+  created_at: number
+  last_login_at: number
+  register_matched: boolean
+  login_matched: boolean
+}
+
+export interface GetUserRiskAlertsParams {
+  status?: RiskAlertStatus | 'all'
+  p?: number
+  page_size?: number
+}
+
+export interface GetUserRiskAlertsResponse {
+  success: boolean
+  message?: string
+  data?: {
+    items: UserRiskAlert[]
+    total: number
+    page: number
+    page_size: number
+  }
+}
+
+export interface UserRiskAlertDetail {
+  alert: UserRiskAlert
+  users: RiskAlertUser[]
 }
 
 export interface SearchUsersParams {

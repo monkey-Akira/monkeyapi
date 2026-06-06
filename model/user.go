@@ -51,6 +51,8 @@ type User struct {
 	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	RegisterIp       string         `json:"register_ip,omitempty" gorm:"type:varchar(64);column:register_ip;index"`
+	LastLoginIp      string         `json:"last_login_ip,omitempty" gorm:"type:varchar(64);column:last_login_ip;index"`
 	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 }
@@ -429,6 +431,11 @@ func (user *User) Insert(inviterId int) error {
 			_ = inviteUser(inviterId)
 		}
 	}
+	if strings.TrimSpace(user.RegisterIp) != "" {
+		if err := CheckAndUpsertIpRiskAlert(user.RegisterIp); err != nil {
+			common.SysLog(fmt.Sprintf("failed to check register ip risk for user %d: %v", user.Id, err))
+		}
+	}
 	return nil
 }
 
@@ -487,6 +494,11 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		if common.QuotaForInviter > 0 {
 			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
 			_ = inviteUser(inviterId)
+		}
+	}
+	if strings.TrimSpace(user.RegisterIp) != "" {
+		if err := CheckAndUpsertIpRiskAlert(user.RegisterIp); err != nil {
+			common.SysLog(fmt.Sprintf("failed to check register ip risk for user %d: %v", user.Id, err))
 		}
 	}
 }
@@ -952,7 +964,17 @@ func GetRootUser() (user *User) {
 }
 
 func UpdateUserLastLoginAt(id int) {
-	if err := DB.Model(&User{}).Where("id = ?", id).Update("last_login_at", common.GetTimestamp()).Error; err != nil {
+	UpdateUserLastLoginInfo(id, "")
+}
+
+func UpdateUserLastLoginInfo(id int, ip string) {
+	updates := map[string]interface{}{
+		"last_login_at": common.GetTimestamp(),
+	}
+	if strings.TrimSpace(ip) != "" {
+		updates["last_login_ip"] = strings.TrimSpace(ip)
+	}
+	if err := DB.Model(&User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		common.SysLog("failed to update user last_login_at: " + err.Error())
 	}
 }

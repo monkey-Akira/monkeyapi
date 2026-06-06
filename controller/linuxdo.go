@@ -226,6 +226,7 @@ func LinuxdoOAuth(c *gin.Context) {
 				user.DisplayName = linuxdoUser.Name
 				user.Role = common.RoleCommonUser
 				user.Status = common.UserStatusEnabled
+				user.RegisterIp = c.ClientIP()
 
 				affCode := session.Get("aff")
 				inviterId := 0
