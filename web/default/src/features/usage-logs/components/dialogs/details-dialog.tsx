@@ -31,7 +31,7 @@ import {
   Info,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatBillingCurrencyFromUSD, getCurrencyDisplay } from '@/lib/currency'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -149,6 +149,8 @@ function formatTokenCount(value: number): string {
   return String(Math.max(0, Math.round(value)))
 }
 
+const DEFAULT_BILLING_QUOTA_PER_UNIT = 500000
+
 function buildBillingProcess(props: {
   log: UsageLog
   other: LogOtherData
@@ -163,8 +165,7 @@ function buildBillingProcess(props: {
 
   if (isTieredExpr) return null
 
-  const { config } = getCurrencyDisplay()
-  const quotaPerUnit = config.quotaPerUnit
+  const quotaPerUnit = DEFAULT_BILLING_QUOTA_PER_UNIT
   const groupRatio = isFiniteNumber(props.effectiveGR) ? props.effectiveGR : 1
   const segments: string[] = []
   let displayAmountUSD = 0
