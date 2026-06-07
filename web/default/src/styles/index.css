@@ -68,6 +68,15 @@ For commercial licensing, please contact support@quantumnous.com
     cursor: pointer;
   }
 
+  @media (hover: hover) and (pointer: fine) and (min-width: 768px) {
+    html.banana-cursor-enabled,
+    html.banana-cursor-enabled body,
+    html.banana-cursor-enabled #root,
+    html.banana-cursor-enabled #root * {
+      cursor: none !important;
+    }
+  }
+
   /* Prevent focus zoom on mobile devices */
   @media screen and (max-width: 767px) {
     input,
@@ -75,6 +84,44 @@ For commercial licensing, please contact support@quantumnous.com
     textarea {
       font-size: 16px !important;
     }
+  }
+}
+
+.banana-cursor {
+  --banana-cursor-x: 0px;
+  --banana-cursor-y: 0px;
+
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 999999;
+  display: none;
+  pointer-events: none;
+  font-size: 28px;
+  line-height: 1;
+  opacity: 0;
+  transform: translate3d(
+      calc(var(--banana-cursor-x) + 4px),
+      calc(var(--banana-cursor-y) + 2px),
+      0
+    )
+    rotate(-18deg);
+  transition: opacity 100ms ease;
+  user-select: none;
+  will-change: transform;
+}
+
+html.banana-cursor-enabled .banana-cursor {
+  display: block;
+}
+
+html.banana-cursor-enabled .banana-cursor.banana-cursor--visible {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 767px) {
+  .banana-cursor {
+    display: none !important;
   }
 }
 
