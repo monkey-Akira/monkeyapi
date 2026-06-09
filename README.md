@@ -130,14 +130,14 @@ docker pull calciumion/new-api:latest
 
 # Using SQLite (default)
 docker run --name new-api -d --restart always \
-  -p 3000:3000 \
+  -p 3006:3006 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
 
 # Using MySQL
 docker run --name new-api -d --restart always \
-  -p 3000:3000 \
+  -p 3006:3006 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
@@ -150,7 +150,7 @@ docker run --name new-api -d --restart always \
 
 ---
 
-🎉 After deployment is complete, visit `http://localhost:3000` to start using!
+🎉 After deployment is complete, visit `http://localhost:3006` to start using!
 
 > [!WARNING]
 > When operating this project as a public generative AI service or API resale service, users should first complete all required filing, licensing, content safety, real-name verification, log retention, tax, payment, and upstream authorization obligations.
@@ -358,7 +358,7 @@ docker-compose up -d
 **Using SQLite:**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3000:3000 \
+  -p 3006:3006 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
@@ -367,7 +367,7 @@ docker run --name new-api -d --restart always \
 **Using MySQL:**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3000:3000 \
+  -p 3006:3006 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
