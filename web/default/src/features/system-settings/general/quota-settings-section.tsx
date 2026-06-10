@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
 import {
@@ -53,6 +54,9 @@ const quotaSchema = z.object({
   QuotaForInviter: z.coerce.number().min(0),
   QuotaForInvitee: z.coerce.number().min(0),
   TopUpLink: z.string(),
+  TopUpLinkImage: z.string(),
+  TopUpLinkTitle: z.string(),
+  TopUpLinkDescription: z.string(),
   general_setting: z.object({
     docs_link: z.string(),
   }),
@@ -248,7 +252,7 @@ export function QuotaSettingsSection({
               control={form.control}
               name='TopUpLink'
               render={({ field }) => (
-                <FormItem>
+                <FormItem className='sm:col-span-2'>
                   <FormLabel>{t('Top-Up Link')}</FormLabel>
                   <FormControl>
                     <Input
@@ -263,6 +267,72 @@ export function QuotaSettingsSection({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name='TopUpLinkImage'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Top-up prompt image')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('https://example.com/topup-banner.jpg')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Large image shown above the redemption code link')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='TopUpLinkTitle'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Top-up prompt title')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('Need a redemption code?')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Title shown in the wallet redemption code prompt')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <SettingsFormGridItem span='full'>
+              <FormField
+                control={form.control}
+                name='TopUpLinkDescription'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Top-up prompt description')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder={t(
+                          'Buy a redemption code, then enter it below to add funds.'
+                        )}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Description shown near the wallet redemption code button'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SettingsFormGridItem>
 
             <FormField
               control={form.control}

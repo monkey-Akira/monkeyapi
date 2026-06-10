@@ -66,6 +66,9 @@ interface RechargeFormCardProps {
   onRedeem: () => void
   redeeming: boolean
   topupLink?: string
+  topupLinkImage?: string
+  topupLinkTitle?: string
+  topupLinkDescription?: string
   loading?: boolean
   priceRatio?: number
   usdExchangeRate?: number
@@ -96,6 +99,9 @@ export function RechargeFormCard({
   onRedeem,
   redeeming,
   topupLink,
+  topupLinkImage,
+  topupLinkTitle,
+  topupLinkDescription,
   loading,
   priceRatio = 1,
   usdExchangeRate = 1,
@@ -136,6 +142,12 @@ export function RechargeFormCard({
     Array.isArray(waffoPayMethods) && waffoPayMethods.length > 0
   const minTopup = getMinTopupAmount(topupInfo)
   const redemptionEnabled = topupInfo?.enable_redemption !== false
+  const redemptionPromptTitle =
+    topupLinkTitle?.trim() || t('Need a redemption code?')
+  const redemptionPromptDescription =
+    topupLinkDescription?.trim() ||
+    t('Buy a redemption code, then enter it below to add funds.')
+  const redemptionPromptImage = topupLinkImage?.trim()
 
   if (loading) {
     return (
@@ -457,6 +469,46 @@ export function RechargeFormCard({
               {t('Have a Code?')}
             </Label>
           </div>
+          {topupLink && (
+            <div className='overflow-hidden rounded-lg border bg-muted/20'>
+              <div className='relative aspect-[16/9] w-full overflow-hidden bg-muted sm:aspect-[3/1]'>
+                {redemptionPromptImage ? (
+                  <img
+                    src={redemptionPromptImage}
+                    alt={redemptionPromptTitle}
+                    className='h-full w-full object-cover'
+                  />
+                ) : (
+                  <div className='flex h-full w-full items-center justify-center bg-primary/10'>
+                    <Gift className='h-14 w-14 text-primary sm:h-16 sm:w-16' />
+                  </div>
+                )}
+              </div>
+              <div className='space-y-3 p-3 sm:p-4'>
+                <div className='space-y-1'>
+                  <div className='text-base font-semibold sm:text-lg'>
+                    {redemptionPromptTitle}
+                  </div>
+                  <p className='text-muted-foreground text-sm'>
+                    {redemptionPromptDescription}
+                  </p>
+                </div>
+                <Button
+                  render={
+                    <a
+                      href={topupLink}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    />
+                  }
+                  className='h-10 w-full gap-2 text-base sm:w-auto sm:px-5'
+                >
+                  {t('Get redemption code now')}
+                  <ExternalLink className='h-4 w-4' />
+                </Button>
+              </div>
+            </div>
+          )}
           <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
             <Input
               id='redemption-code'
@@ -475,20 +527,6 @@ export function RechargeFormCard({
               {t('Redeem')}
             </Button>
           </div>
-          {topupLink && (
-            <p className='text-muted-foreground text-xs'>
-              {t('Need a redemption code?')}{' '}
-              <a
-                href={topupLink}
-                target='_blank'
-                rel='noopener noreferrer'
-                className='inline-flex items-center gap-1 underline-offset-4 hover:underline'
-              >
-                {t('Get one here')}
-                <ExternalLink className='h-3 w-3' />
-              </a>
-            </p>
-          )}
         </div>
       ) : (
         <Alert className='border-t'>

@@ -189,6 +189,9 @@ export type BillingSettings = {
   QuotaForInviter: number
   QuotaForInvitee: number
   TopUpLink: string
+  TopUpLinkImage: string
+  TopUpLinkTitle: string
+  TopUpLinkDescription: string
   'general_setting.docs_link': string
   'quota_setting.enable_free_model_pre_consume': boolean
   QuotaPerUnit: number

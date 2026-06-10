@@ -136,6 +136,12 @@ export interface TopupInfo {
   discount: Record<number, number>
   /** Optional topup link for purchasing codes */
   topup_link?: string
+  /** Optional image URL shown in the redemption code purchase prompt */
+  topup_link_image?: string
+  /** Optional title shown in the redemption code purchase prompt */
+  topup_link_title?: string
+  /** Optional description shown in the redemption code purchase prompt */
+  topup_link_description?: string
   /** Whether Creem topup is enabled */
   enable_creem_topup?: boolean
   /** Available Creem products */

@@ -289,6 +289,9 @@ export function Wallet(props: WalletProps) {
                   onRedeem={handleRedeem}
                   redeeming={redeeming}
                   topupLink={topupInfo?.topup_link}
+                  topupLinkImage={topupInfo?.topup_link_image}
+                  topupLinkTitle={topupInfo?.topup_link_title}
+                  topupLinkDescription={topupInfo?.topup_link_description}
                   loading={topupLoading}
                   priceRatio={(status?.price as number) || 1}
                   usdExchangeRate={effectiveUsdExchangeRate}

@@ -4518,6 +4518,15 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Buy a redemption code, then enter it below to add funds.": "Buy a redemption code, then enter it below to add funds.",
+    "Description shown near the wallet redemption code button": "Description shown near the wallet redemption code button",
+    "Get redemption code now": "Get redemption code now",
+    "Large image shown above the redemption code link": "Large image shown above the redemption code link",
+    "Title shown in the wallet redemption code prompt": "Title shown in the wallet redemption code prompt",
+    "Top-up prompt description": "Top-up prompt description",
+    "Top-up prompt image": "Top-up prompt image",
+    "Top-up prompt title": "Top-up prompt title",
+    "https://example.com/topup-banner.jpg": "https://example.com/topup-banner.jpg"
   }
 }
