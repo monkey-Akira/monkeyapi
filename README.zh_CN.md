@@ -130,14 +130,14 @@ docker pull calciumion/new-api:latest
 
 # 使用 SQLite（默认）
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
 
 # 使用 MySQL
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
@@ -150,7 +150,7 @@ docker run --name new-api -d --restart always \
 
 ---
 
-🎉 部署完成后，访问 `http://localhost:3006` 即可使用！
+🎉 部署完成后，访问 `http://localhost:3000` 即可使用！
 
 > [!WARNING]
 > 将本项目作为面向公众的生成式 AI 服务或 API 转售服务运营时，使用者应先完成备案、内容安全、实名、日志留存、税务、支付和上游授权等合规义务。
@@ -358,7 +358,7 @@ docker-compose up -d
 **使用 SQLite：**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
@@ -367,7 +367,7 @@ docker run --name new-api -d --restart always \
 **使用 MySQL：**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \

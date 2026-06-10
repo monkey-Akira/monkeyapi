@@ -130,14 +130,14 @@ docker pull calciumion/new-api:latest
 
 # SQLiteを使用（デフォルト）
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
 
 # MySQLを使用
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
@@ -150,7 +150,7 @@ docker run --name new-api -d --restart always \
 
 ---
 
-🎉 デプロイが完了したら、`http://localhost:3006` にアクセスして使用を開始してください！
+🎉 デプロイが完了したら、`http://localhost:3000` にアクセスして使用を開始してください！
 
 > [!WARNING]
 > 本プロジェクトを公衆向け生成 AI サービスまたは API 再販サービスとして運営する場合、ユーザーは届出、コンテンツセキュリティ、本人確認、ログ保持、税務、決済、上流認可などの必要なコンプライアンス義務を先に完了してください。
@@ -360,7 +360,7 @@ docker-compose up -d
 **SQLiteを使用:**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \
   calciumion/new-api:latest
@@ -369,7 +369,7 @@ docker run --name new-api -d --restart always \
 **MySQLを使用:**
 ```bash
 docker run --name new-api -d --restart always \
-  -p 3006:3006 \
+  -p 3000:3000 \
   -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
   -e TZ=Asia/Shanghai \
   -v ./data:/data \

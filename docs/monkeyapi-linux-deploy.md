@@ -75,9 +75,9 @@ nano .env.production
 没有域名、先通过宝塔或 Nginx 反代时，可以这样写：
 
 ```env
-FRONTEND_BASE_URL=http://你的服务器IP:3006
+FRONTEND_BASE_URL=http://你的服务器IP:3000
 HOST_BIND=127.0.0.1
-APP_PORT=3006
+APP_PORT=3000
 TZ=Asia/Shanghai
 NODE_NAME=monkeyapi-node-1
 
@@ -91,8 +91,8 @@ SESSION_SECRET=MonkeyApi_Session_1234567890_abcdef
 
 说明：
 
-- `HOST_BIND=127.0.0.1` 表示只允许服务器本机访问 3006 端口，推荐配合宝塔/Nginx 反代。
-- 如果你想临时直接访问 `服务器IP:3006`，改成 `HOST_BIND=0.0.0.0`，同时安全组/防火墙要放行 3006。
+- `HOST_BIND=127.0.0.1` 表示只允许服务器本机访问 3000 端口，推荐配合宝塔/Nginx 反代。
+- 如果你想临时直接访问 `服务器IP:3000`，改成 `HOST_BIND=0.0.0.0`，同时安全组/防火墙要放行 3000。
 - `POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`SESSION_SECRET` 不能留空。
 - 密码建议只用英文、数字、下划线、短横线和点号。
 - `.env.production` 不要提交到 GitHub。
@@ -123,7 +123,7 @@ docker logs --tail=100 monkeyapi
 正常状态类似：
 
 ```text
-monkeyapi            Up ... 127.0.0.1:3006->3006/tcp
+monkeyapi            Up ... 127.0.0.1:3000->3000/tcp
 monkeyapi-postgres   Up ... healthy
 monkeyapi-redis      Up ... healthy
 ```
@@ -138,7 +138,7 @@ ready in ...
 本机测试：
 
 ```bash
-curl http://127.0.0.1:3006/api/status
+curl http://127.0.0.1:3000/api/status
 ```
 
 返回里有 `"success":true` 就正常。
@@ -149,13 +149,13 @@ curl http://127.0.0.1:3006/api/status
 
 ```env
 HOST_BIND=127.0.0.1
-APP_PORT=3006
+APP_PORT=3000
 ```
 
 宝塔反代目标填写：
 
 ```text
-http://127.0.0.1:3006
+http://127.0.0.1:3000
 ```
 
 Nginx 示例：
@@ -168,7 +168,7 @@ server {
     client_max_body_size 100m;
 
     location / {
-        proxy_pass http://127.0.0.1:3006;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
 
         proxy_set_header Host $host;
@@ -241,18 +241,18 @@ docker compose --env-file .env.production -f docker-compose.prod.yml down
 
 ## 8. 常见问题
 
-### 3006 端口被占用
+### 3000 端口被占用
 
 报错：
 
 ```text
-Bind for 0.0.0.0:3006 failed: port is already allocated
+Bind for 0.0.0.0:3000 failed: port is already allocated
 ```
 
 查看占用：
 
 ```bash
-ss -lntp | grep :3006
+ss -lntp | grep :3000
 docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Ports}}\t{{.Image}}"
 ```
 
@@ -264,7 +264,7 @@ docker rm 旧容器名
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 ```
 
-如果 3006 必须给别的服务使用，改 `.env.production`：
+如果 3000 必须给别的服务使用，改 `.env.production`：
 
 ```env
 APP_PORT=3007
