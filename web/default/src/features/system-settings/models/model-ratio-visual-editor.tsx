@@ -79,6 +79,11 @@ type ModelRatioVisualEditorProps = {
   billingMode: string
   billingExpr: string
   onChange: (field: string, value: string) => void
+  candidateModelNames?: string[]
+  filterMode?: 'all' | 'unset'
+  emptyMessage?: string
+  allowAddModel?: boolean
+  allowDeleteModel?: boolean
 }
 
 type ModelRow = {
@@ -98,8 +103,14 @@ type ModelRow = {
 }
 
 const STORAGE_KEY = 'model-ratio-column-visibility'
+const EMPTY_CANDIDATE_MODELS: string[] = []
 
 const hasValue = (value?: string) => value !== undefined && value !== ''
+
+const isBasePricingUnset = (row: ModelRow) =>
+  row.billingMode !== 'tiered_expr' &&
+  !hasValue(row.price) &&
+  !hasValue(row.ratio)
 
 const toNumberOrNull = (value?: string) => {
   if (!hasValue(value)) return null
@@ -205,6 +216,11 @@ export const ModelRatioVisualEditor = memo(
     billingMode,
     billingExpr,
     onChange,
+    candidateModelNames = EMPTY_CANDIDATE_MODELS,
+    filterMode = 'all',
+    emptyMessage,
+    allowAddModel = true,
+    allowDeleteModel = true,
   }: ModelRatioVisualEditorProps) {
     const { t } = useTranslation()
     const isMobile = useMediaQuery('(max-width: 767px)')
@@ -307,6 +323,7 @@ export const ModelRatioVisualEditor = memo(
       )
 
       const modelNames = new Set([
+        ...candidateModelNames,
         ...Object.keys(priceMap),
         ...Object.keys(ratioMap),
         ...Object.keys(cacheMap),
@@ -377,8 +394,15 @@ export const ModelRatioVisualEditor = memo(
         }
       })
 
-      return modelData.sort((a, b) => a.name.localeCompare(b.name))
+      const filteredModelData =
+        filterMode === 'unset'
+          ? modelData.filter(isBasePricingUnset)
+          : modelData
+
+      return filteredModelData.sort((a, b) => a.name.localeCompare(b.name))
     }, [
+      candidateModelNames,
+      filterMode,
       modelPrice,
       modelRatio,
       cacheRatio,
@@ -657,19 +681,21 @@ export const ModelRatioVisualEditor = memo(
               >
                 <Pencil />
               </Button>
-              <Button
-                variant='ghost'
-                size='sm'
-                onClick={() => handleDelete(row.original.name)}
-              >
-                <Trash2 />
-              </Button>
+              {allowDeleteModel && (
+                <Button
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => handleDelete(row.original.name)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
             </div>
           ),
           enableHiding: false,
         },
       ]
-    }, [handleEdit, handleDelete, t])
+    }, [allowDeleteModel, handleEdit, handleDelete, t])
 
     const table = useReactTable({
       data: models,
@@ -908,10 +934,12 @@ export const ModelRatioVisualEditor = memo(
                 },
               ]}
               preActions={
-                <Button onClick={handleAdd}>
-                  <Plus data-icon='inline-start' />
-                  {t('Add model')}
-                </Button>
+                allowAddModel ? (
+                  <Button onClick={handleAdd}>
+                    <Plus data-icon='inline-start' />
+                    {t('Add model')}
+                  </Button>
+                ) : null
               }
             />
 
@@ -919,7 +947,8 @@ export const ModelRatioVisualEditor = memo(
               <div className='text-muted-foreground rounded-lg border border-dashed p-8 text-center'>
                 {table.getState().globalFilter
                   ? t('No models match your search')
-                  : t('No models configured. Use Add model to get started.')}
+                  : emptyMessage ||
+                    t('No models configured. Use Add model to get started.')}
               </div>
             ) : (
               <div className='overflow-hidden rounded-md border'>
@@ -998,10 +1027,12 @@ export const ModelRatioVisualEditor = memo(
                     'Use the full-width table to scan prices, then select a row to edit it here.'
                   )}
                 </p>
-                <Button variant='outline' onClick={handleAdd}>
-                  <Plus data-icon='inline-start' />
-                  {t('Add model')}
-                </Button>
+                {allowAddModel && (
+                  <Button variant='outline' onClick={handleAdd}>
+                    <Plus data-icon='inline-start' />
+                    {t('Add model')}
+                  </Button>
+                )}
               </div>
             )}
           </div>

@@ -301,6 +301,7 @@ export function ChannelMutateDrawer({
   >(null)
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false)
   const [paramOverrideEditorOpen, setParamOverrideEditorOpen] = useState(false)
+  const [selectedModelSearch, setSelectedModelSearch] = useState('')
 
   const isEditing = Boolean(currentRow)
   const channelId = currentRow?.id ?? null
@@ -439,6 +440,14 @@ export function ChannelMutateDrawer({
     () => parseModelsString(currentModels),
     [currentModels]
   )
+
+  const filteredCurrentModels = useMemo(() => {
+    const search = selectedModelSearch.trim().toLowerCase()
+    if (!search) return currentModelsArray
+    return currentModelsArray.filter((model) =>
+      model.toLowerCase().includes(search)
+    )
+  }, [currentModelsArray, selectedModelSearch])
 
   const currentTypeLabel = useMemo(
     () =>
@@ -2175,6 +2184,73 @@ export function ChannelMutateDrawer({
                                   maxVisibleChips={8}
                                 />
                               </FormControl>
+                              {currentModelsArray.length > 0 && (
+                                <div className='border-border/60 bg-background rounded-md border p-3'>
+                                  <div className='mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                    <div className='flex items-center gap-2'>
+                                      <span className='text-sm font-medium'>
+                                        {t('Current models')}
+                                      </span>
+                                      <Badge variant='secondary'>
+                                        {currentModelsArray.length}
+                                      </Badge>
+                                    </div>
+                                    <Input
+                                      value={selectedModelSearch}
+                                      onChange={(event) =>
+                                        setSelectedModelSearch(
+                                          event.target.value
+                                        )
+                                      }
+                                      placeholder={t('Search selected models')}
+                                      aria-label={t('Search selected models')}
+                                      className='h-8 sm:w-64'
+                                    />
+                                  </div>
+                                  {filteredCurrentModels.length > 0 ? (
+                                    <div className='grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3'>
+                                      {filteredCurrentModels.map((model) => (
+                                        <div
+                                          key={model}
+                                          className='border-border/60 bg-muted/30 flex min-h-9 min-w-0 items-center justify-between gap-2 rounded-md border px-2 py-1.5'
+                                        >
+                                          <span
+                                            className='min-w-0 truncate text-sm'
+                                            title={model}
+                                          >
+                                            {model}
+                                          </span>
+                                          <Button
+                                            type='button'
+                                            variant='ghost'
+                                            size='icon'
+                                            className='h-7 w-7 shrink-0'
+                                            aria-label={t('Remove {{model}}', {
+                                              model,
+                                            })}
+                                            onClick={() =>
+                                              updateModels(
+                                                currentModelsArray.filter(
+                                                  (item) => item !== model
+                                                )
+                                              )
+                                            }
+                                          >
+                                            <Trash2
+                                              className='h-4 w-4'
+                                              aria-hidden='true'
+                                            />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className='text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm'>
+                                      {t('No selected models match your search')}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {modelMappingGuardrail.exposedTargetModels
                                 .length > 0 && (
                                 <Alert className='border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-50'>

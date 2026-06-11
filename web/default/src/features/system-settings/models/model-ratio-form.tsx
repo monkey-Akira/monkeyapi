@@ -60,6 +60,11 @@ type ModelRatioFormProps = {
   onReset: () => void
   isSaving: boolean
   isResetting: boolean
+  candidateModelNames?: string[]
+  filterMode?: 'all' | 'unset'
+  emptyMessage?: string
+  allowAddModel?: boolean
+  allowDeleteModel?: boolean
 }
 
 export const ModelRatioForm = memo(function ModelRatioForm({
@@ -68,6 +73,11 @@ export const ModelRatioForm = memo(function ModelRatioForm({
   onReset,
   isSaving,
   isResetting,
+  candidateModelNames,
+  filterMode,
+  emptyMessage,
+  allowAddModel,
+  allowDeleteModel,
 }: ModelRatioFormProps) {
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
@@ -137,6 +147,11 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               audioCompletionRatio={form.watch('AudioCompletionRatio')}
               billingMode={form.watch('BillingMode')}
               billingExpr={form.watch('BillingExpr')}
+              candidateModelNames={candidateModelNames}
+              filterMode={filterMode}
+              emptyMessage={emptyMessage}
+              allowAddModel={allowAddModel}
+              allowDeleteModel={allowDeleteModel}
               onChange={(field, value) => {
                 const fieldMap: Record<string, keyof ModelFormValues> = {
                   'billing_setting.billing_mode': 'BillingMode',
