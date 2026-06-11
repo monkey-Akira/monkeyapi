@@ -81,9 +81,9 @@ APP_PORT=3000
 TZ=Asia/Shanghai
 NODE_NAME=monkeyapi-node-1
 
-POSTGRES_USER=root
-POSTGRES_PASSWORD=MonkeyApi_DB_123456
-POSTGRES_DB=new-api
+MYSQL_USER=root
+MYSQL_PASSWORD=MonkeyApi_DB_123456
+MYSQL_DATABASE=new-api
 
 REDIS_PASSWORD=MonkeyApi_Redis_123456
 SESSION_SECRET=MonkeyApi_Session_1234567890_abcdef
@@ -93,7 +93,7 @@ SESSION_SECRET=MonkeyApi_Session_1234567890_abcdef
 
 - `HOST_BIND=127.0.0.1` 表示只允许服务器本机访问 3000 端口，推荐配合宝塔/Nginx 反代。
 - 如果你想临时直接访问 `服务器IP:3000`，改成 `HOST_BIND=0.0.0.0`，同时安全组/防火墙要放行 3000。
-- `POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`SESSION_SECRET` 不能留空。
+- `MYSQL_PASSWORD`、`REDIS_PASSWORD`、`SESSION_SECRET` 不能留空。
 - 密码建议只用英文、数字、下划线、短横线和点号。
 - `.env.production` 不要提交到 GitHub。
 
@@ -124,7 +124,7 @@ docker logs --tail=100 monkeyapi
 
 ```text
 monkeyapi            Up ... 127.0.0.1:3000->3000/tcp
-monkeyapi-postgres   Up ... healthy
+monkeyapi-mysql      Up ...
 monkeyapi-redis      Up ... healthy
 ```
 
@@ -282,12 +282,12 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d
 http://127.0.0.1:3007
 ```
 
-### 应用连不上 postgres
+### 应用连不上 mysql
 
 报错：
 
 ```text
-lookup postgres on 127.0.0.53:53: read: connection refused
+lookup mysql on 127.0.0.53:53: read: connection refused
 ```
 
 先检查网络：
@@ -335,7 +335,7 @@ system is not initialized and no root user exists
 ```bash
 cd /monkey/opt/monkeyapi
 mkdir -p /monkey/opt/monkeyapi-backup
-docker run --rm -v monkeyapi_pg_data:/volume -v /monkey/opt/monkeyapi-backup:/backup alpine \
-  tar czf /backup/pg_data_$(date +%F_%H%M%S).tar.gz -C /volume .
+docker run --rm -v monkeyapi_mysql_data:/volume -v /monkey/opt/monkeyapi-backup:/backup alpine \
+  tar czf /backup/mysql_data_$(date +%F_%H%M%S).tar.gz -C /volume .
 tar czf /monkey/opt/monkeyapi-backup/data_$(date +%F_%H%M%S).tar.gz data logs
 ```
