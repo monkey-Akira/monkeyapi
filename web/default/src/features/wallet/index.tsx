@@ -200,9 +200,14 @@ export function Wallet(props: WalletProps) {
   const handleRedeem = async () => {
     if (!redemptionCode) return
 
-    const success = await redeemCode(redemptionCode)
-    if (success) {
+    const quotaAdded = await redeemCode(redemptionCode)
+    if (quotaAdded !== null) {
       setRedemptionCode('')
+      setUser((currentUser) =>
+        currentUser
+          ? { ...currentUser, quota: currentUser.quota + quotaAdded }
+          : currentUser
+      )
       await fetchUser()
     }
   }
