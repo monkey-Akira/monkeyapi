@@ -36,11 +36,11 @@ export function parseUserSettings(settingsJson?: string): UserSettings {
 }
 
 /**
- * Get display name or fallback to username
+ * Get the stable account name shown as the primary user identity.
  */
 export function getDisplayName(user?: UserProfile): string {
   if (!user) return ''
-  return user.display_name || user.username
+  return user.username || user.display_name || ''
 }
 
 /**

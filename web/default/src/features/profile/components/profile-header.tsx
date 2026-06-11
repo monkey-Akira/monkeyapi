@@ -75,6 +75,10 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
   if (!profile) return null
 
   const displayName = getDisplayName(profile)
+  const nickname =
+    profile.display_name && profile.display_name !== profile.username
+      ? profile.display_name
+      : ''
   const initials = getUserInitials(profile)
   const roleLabel = getRoleLabel(profile.role)
   const stats = [
@@ -121,7 +125,7 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
             </div>
 
             <div className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:gap-x-4 sm:text-sm'>
-              <span className='truncate'>@{profile.username}</span>
+              {nickname && <span className='truncate'>{nickname}</span>}
               {profile.email && (
                 <>
                   <span>•</span>

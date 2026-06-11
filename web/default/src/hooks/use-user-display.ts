@@ -26,30 +26,31 @@ import { getRoleLabel } from '@/lib/roles'
  * Centralizes user display logic used across ProfileDropdown and MobileDrawer
  */
 export function useUserDisplay(user: AuthUser | null | undefined) {
-  const { t } = useTranslation()
+  const { i18n } = useTranslation()
   return useMemo(() => {
     if (!user) {
       return {
-        displayName: t('User'),
+        displayName: '',
         secondaryText: '',
-        initials: 'U',
+        initials: '?',
         roleLabel: '',
       }
     }
 
-    // Display name: priority order
-    const displayName = user.display_name || user.username || t('User')
+    const displayName = user.username || user.display_name || `#${user.id}`
 
     // Secondary text: first available identifier
     const secondaryText = (() => {
+      if (user.display_name && user.display_name !== displayName) {
+        return user.display_name
+      }
       if (user.email) return user.email
       if (user.github_id) return `GitHub ID: ${user.github_id}`
       if (user.oidc_id) return `OIDC ID: ${user.oidc_id}`
       if (user.wechat_id) return `WeChat ID: ${user.wechat_id}`
       if (user.telegram_id) return `Telegram ID: ${user.telegram_id}`
       if (user.linux_do_id) return `LinuxDO ID: ${user.linux_do_id}`
-      if (user.username) return user.username
-      if (user.display_name) return user.display_name
+      if (user.username && user.username !== displayName) return user.username
       return ''
     })()
 
@@ -70,5 +71,5 @@ export function useUserDisplay(user: AuthUser | null | undefined) {
       initials,
       roleLabel,
     }
-  }, [user, t])
+  }, [user, i18n.language])
 }
