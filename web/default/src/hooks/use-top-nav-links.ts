@@ -30,6 +30,15 @@ export type TopNavLink = {
   external?: boolean
 }
 
+function isAbsoluteHttpUrl(value: string) {
+  return value.startsWith('http://') || value.startsWith('https://')
+}
+
+function buildEmbedHref(url: string, title: string) {
+  const search = new URLSearchParams({ url, title })
+  return `/embed?${search.toString()}`
+}
+
 /**
  * Generate top navigation links based on HeaderNavModules configuration from
  * backend /api/status. The parser accepts the legacy boolean/object format and
@@ -56,13 +65,16 @@ export function useTopNavLinks(): TopNavLink[] {
     .map((item) => {
       const useDocsOverride = item.id === 'docs' && item.href === '/docs'
       const href = useDocsOverride && docsLink ? docsLink : item.href
-      const external =
-        item.external || href.startsWith('http://') || href.startsWith('https://')
+      const title =
+        item.kind === 'builtin' ? t(item.labelKey ?? item.label) : item.label
+      const isHttpUrl = isAbsoluteHttpUrl(href)
+      const external = Boolean(item.external && isHttpUrl)
+      const resolvedHref =
+        isHttpUrl && !external ? buildEmbedHref(href, title) : href
 
       return {
-        title:
-          item.kind === 'builtin' ? t(item.labelKey ?? item.label) : item.label,
-        href,
+        title,
+        href: resolvedHref,
         external,
         requiresAuth: Boolean(item.requireAuth && !isAuthed),
       }
