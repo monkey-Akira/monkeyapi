@@ -61,7 +61,7 @@ function EmbedPage() {
     <PublicLayout showMainContainer={false}>
       <iframe
         src={search.url}
-        className='h-[calc(100vh-3.5rem)] w-full border-0'
+        className='mt-16 h-[calc(100svh-4rem)] w-full border-0'
         title={title}
       />
     </PublicLayout>
