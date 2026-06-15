@@ -71,6 +71,7 @@ const PageLayout = () => {
 
   const isConsoleRoute = location.pathname.startsWith('/console');
   const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  const isLegacyChannelEmbed = location.pathname === '/legacy/channel';
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {
@@ -143,6 +144,17 @@ const PageLayout = () => {
       }
     }
   }, [i18n, userState?.user?.setting]);
+
+  if (isLegacyChannelEmbed) {
+    return (
+      <div className='min-h-screen bg-white'>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+        <ToastContainer />
+      </div>
+    );
+  }
 
   return (
     <Layout

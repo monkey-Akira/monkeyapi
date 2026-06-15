@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2023-2026 QuantumNous
+Copyright (C) 2025 QuantumNous
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -16,23 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
-import { SectionPageLayout } from '@/components/layout'
 
-export function Channels() {
-  const { t } = useTranslation()
+import React from 'react';
+import ChannelsTable from '../../components/table/channels';
+
+const LegacyChannel = () => {
   return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Channels')}</SectionPageLayout.Title>
-      <SectionPageLayout.Content>
-        <iframe
-          src='/legacy/channel'
-          title={t('Channels')}
-          className='h-[calc(100svh-9rem)] min-h-[720px] w-full border-0 bg-white'
-          referrerPolicy='same-origin'
-          allow='clipboard-read; clipboard-write'
-        />
-      </SectionPageLayout.Content>
-    </SectionPageLayout>
-  )
-}
+    <div className='min-h-screen bg-white px-2 py-2'>
+      <ChannelsTable />
+    </div>
+  );
+};
+
+export default LegacyChannel;
