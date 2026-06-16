@@ -321,6 +321,20 @@ func UpdateUserRiskAlertStatus(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+func DisableUserRiskAlertUsers(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	result, err := model.DisableUserRiskAlertUsers(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, result)
+}
+
 func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")

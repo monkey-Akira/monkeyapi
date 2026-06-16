@@ -26,6 +26,16 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -41,6 +51,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  disableUserRiskAlertUsers,
   getUserRiskAlert,
   getUserRiskAlerts,
   getUserIpRiskAlertOption,
@@ -48,6 +59,7 @@ import {
   updateUserIpRiskAlertOption,
   updateUserRiskAlertStatus,
 } from '../api'
+import { USER_ROLE, USER_STATUS } from '../constants'
 import type { RiskAlertStatus } from '../types'
 import { useUsers } from './users-provider'
 
@@ -77,6 +89,7 @@ export function UserRiskAlerts() {
   const { triggerRefresh } = useUsers()
   const [status, setStatus] = useState<RiskAlertStatus | 'all'>('open')
   const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null)
+  const [disableConfirmOpen, setDisableConfirmOpen] = useState(false)
 
   const optionQuery = useQuery({
     queryKey: ['user-ip-risk-alert-option'],
@@ -162,6 +175,35 @@ export function UserRiskAlerts() {
     },
   })
 
+  const bulkDisableMutation = useMutation({
+    mutationFn: async (alertId: number) => {
+      const res = await disableUserRiskAlertUsers(alertId)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to disable users'))
+      }
+      return res.data
+    },
+    onSuccess: (data) => {
+      toast.success(
+        t('Disabled users') + `: ${data?.disabled_count ?? 0}`
+      )
+      setDisableConfirmOpen(false)
+      triggerRefresh()
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['user-risk-alerts'] })
+      if (selectedAlertId) {
+        queryClient.invalidateQueries({
+          queryKey: ['user-risk-alert-detail', selectedAlertId],
+        })
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : t('Operation failed')
+      )
+    },
+  })
+
   const optionMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
       const res = await updateUserIpRiskAlertOption(enabled)
@@ -189,6 +231,11 @@ export function UserRiskAlerts() {
   const total = alertsQuery.data?.total || 0
   const detail = detailQuery.data
   const riskAlertEnabled = optionQuery.data?.enabled ?? true
+  const disableCandidateCount =
+    detail?.users.filter(
+      (user) =>
+        user.role === USER_ROLE.USER && user.status === USER_STATUS.ENABLED
+    ).length ?? 0
 
   return (
     <div className='border-border bg-background rounded-lg border'>
@@ -254,63 +301,65 @@ export function UserRiskAlerts() {
       )}
 
       {alerts.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('IP')}</TableHead>
-              <TableHead>{t('Users')}</TableHead>
-              <TableHead>{t('Register')}</TableHead>
-              <TableHead>{t('Login')}</TableHead>
-              <TableHead>{t('Status')}</TableHead>
-              <TableHead>{t('Updated At')}</TableHead>
-              <TableHead className='text-right'>{t('Actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {alerts.map((alert) => (
-              <TableRow key={alert.id}>
-                <TableCell className='font-mono'>{alert.ip}</TableCell>
-                <TableCell>{alert.user_count}</TableCell>
-                <TableCell>{alert.register_count}</TableCell>
-                <TableCell>{alert.login_count}</TableCell>
-                <TableCell>
-                  <Badge variant={getRiskStatusVariant(alert.status)}>
-                    {t(getRiskStatusLabel(alert.status))}
-                  </Badge>
-                </TableCell>
-                <TableCell>{formatTimestamp(alert.updated_at)}</TableCell>
-                <TableCell>
-                  <div className='flex justify-end gap-2'>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='outline'
-                      onClick={() => setSelectedAlertId(alert.id)}
-                    >
-                      <Eye className='size-3.5' />
-                      {t('Details')}
-                    </Button>
-                    <Button
-                      type='button'
-                      size='sm'
-                      variant='outline'
-                      disabled={statusMutation.isPending}
-                      onClick={() =>
-                        statusMutation.mutate({
-                          id: alert.id,
-                          status: 'handled',
-                        })
-                      }
-                    >
-                      <Check className='size-3.5' />
-                      {t('Handled')}
-                    </Button>
-                  </div>
-                </TableCell>
+        <div className='max-h-[360px] overflow-auto'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('IP')}</TableHead>
+                <TableHead>{t('Users')}</TableHead>
+                <TableHead>{t('Register')}</TableHead>
+                <TableHead>{t('Login')}</TableHead>
+                <TableHead>{t('Status')}</TableHead>
+                <TableHead>{t('Updated At')}</TableHead>
+                <TableHead className='text-right'>{t('Actions')}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {alerts.map((alert) => (
+                <TableRow key={alert.id}>
+                  <TableCell className='font-mono'>{alert.ip}</TableCell>
+                  <TableCell>{alert.user_count}</TableCell>
+                  <TableCell>{alert.register_count}</TableCell>
+                  <TableCell>{alert.login_count}</TableCell>
+                  <TableCell>
+                    <Badge variant={getRiskStatusVariant(alert.status)}>
+                      {t(getRiskStatusLabel(alert.status))}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatTimestamp(alert.updated_at)}</TableCell>
+                  <TableCell>
+                    <div className='flex justify-end gap-2'>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        onClick={() => setSelectedAlertId(alert.id)}
+                      >
+                        <Eye className='size-3.5' />
+                        {t('Details')}
+                      </Button>
+                      <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          statusMutation.mutate({
+                            id: alert.id,
+                            status: 'handled',
+                          })
+                        }
+                      >
+                        <Check className='size-3.5' />
+                        {t('Handled')}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       <Dialog
@@ -319,8 +368,8 @@ export function UserRiskAlerts() {
           if (!open) setSelectedAlertId(null)
         }}
       >
-        <DialogContent className='sm:max-w-5xl'>
-          <DialogHeader>
+        <DialogContent className='flex max-h-[85vh] flex-col sm:max-w-5xl'>
+          <DialogHeader className='shrink-0'>
             <DialogTitle>{t('Risk Alert Detail')}</DialogTitle>
           </DialogHeader>
           {detailQuery.isLoading && (
@@ -329,7 +378,7 @@ export function UserRiskAlerts() {
             </div>
           )}
           {detail && (
-            <div className='space-y-4'>
+            <div className='space-y-4 overflow-y-auto pr-1'>
               <div className='grid gap-2 text-sm sm:grid-cols-5'>
                 <div>
                   <div className='text-muted-foreground text-xs'>{t('IP')}</div>
@@ -363,76 +412,92 @@ export function UserRiskAlerts() {
                 </div>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>{t('Username')}</TableHead>
-                    <TableHead>{t('Quota')}</TableHead>
-                    <TableHead>{t('Register IP')}</TableHead>
-                    <TableHead>{t('Last Login IP')}</TableHead>
-                    <TableHead>{t('Last Login')}</TableHead>
-                    <TableHead className='text-right'>{t('Actions')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detail.users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.id}</TableCell>
-                      <TableCell>
-                        <div className='flex flex-col'>
-                          <span>{user.username}</span>
-                          <span className='text-muted-foreground text-xs'>
-                            {user.email || user.display_name || '-'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatQuota(user.quota)}</TableCell>
-                      <TableCell>
-                        <span className='font-mono'>
-                          {user.register_ip || '-'}
-                        </span>
-                        {user.register_matched && (
-                          <Badge className='ml-2' variant='destructive'>
-                            {t('Match')}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className='font-mono'>
-                          {user.last_login_ip || '-'}
-                        </span>
-                        {user.login_matched && (
-                          <Badge className='ml-2' variant='destructive'>
-                            {t('Match')}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {formatTimestamp(user.last_login_at)}
-                      </TableCell>
-                      <TableCell>
-                        <div className='flex justify-end'>
-                          <Button
-                            type='button'
-                            size='sm'
-                            variant='destructive'
-                            disabled={
-                              user.status !== 1 || disableMutation.isPending
-                            }
-                            onClick={() => disableMutation.mutate(user.id)}
-                          >
-                            <Ban className='size-3.5' />
-                            {t('Disable')}
-                          </Button>
-                        </div>
-                      </TableCell>
+              <div className='max-h-[45vh] overflow-auto'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>{t('Username')}</TableHead>
+                      <TableHead>{t('Quota')}</TableHead>
+                      <TableHead>{t('Register IP')}</TableHead>
+                      <TableHead>{t('Last Login IP')}</TableHead>
+                      <TableHead>{t('Last Login')}</TableHead>
+                      <TableHead className='text-right'>
+                        {t('Actions')}
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {detail.users.map((user) => (
+                      <TableRow key={user.id}>
+                        <TableCell>{user.id}</TableCell>
+                        <TableCell>
+                          <div className='flex flex-col'>
+                            <span>{user.username}</span>
+                            <span className='text-muted-foreground text-xs'>
+                              {user.email || user.display_name || '-'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatQuota(user.quota)}</TableCell>
+                        <TableCell>
+                          <span className='font-mono'>
+                            {user.register_ip || '-'}
+                          </span>
+                          {user.register_matched && (
+                            <Badge className='ml-2' variant='destructive'>
+                              {t('Match')}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className='font-mono'>
+                            {user.last_login_ip || '-'}
+                          </span>
+                          {user.login_matched && (
+                            <Badge className='ml-2' variant='destructive'>
+                              {t('Match')}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatTimestamp(user.last_login_at)}
+                        </TableCell>
+                        <TableCell>
+                          <div className='flex justify-end'>
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='destructive'
+                              disabled={
+                                user.status !== USER_STATUS.ENABLED ||
+                                disableMutation.isPending
+                              }
+                              onClick={() => disableMutation.mutate(user.id)}
+                            >
+                              <Ban className='size-3.5' />
+                              {t('Disable')}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
               <div className='flex justify-end gap-2'>
+                <Button
+                  type='button'
+                  variant='destructive'
+                  disabled={
+                    disableCandidateCount === 0 || bulkDisableMutation.isPending
+                  }
+                  onClick={() => setDisableConfirmOpen(true)}
+                >
+                  <Ban className='size-3.5' />
+                  {t('Disable matched users')}
+                </Button>
                 <Button
                   type='button'
                   variant='outline'
@@ -464,6 +529,43 @@ export function UserRiskAlerts() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={disableConfirmOpen}
+        onOpenChange={setDisableConfirmOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Disable matched users')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('This will disable enabled regular users matched by this IP')}:{' '}
+              <span className='font-semibold'>{disableCandidateCount}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDisableMutation.isPending}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                !selectedAlertId ||
+                disableCandidateCount === 0 ||
+                bulkDisableMutation.isPending
+              }
+              onClick={() => {
+                if (selectedAlertId) {
+                  bulkDisableMutation.mutate(selectedAlertId)
+                }
+              }}
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            >
+              {bulkDisableMutation.isPending
+                ? t('Processing...')
+                : t('Disable')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

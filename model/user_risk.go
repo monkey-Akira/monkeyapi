@@ -55,6 +55,12 @@ type RiskAlertUser struct {
 	LoginMatched    bool   `json:"login_matched"`
 }
 
+type DisableRiskAlertUsersResult struct {
+	DisabledCount int   `json:"disabled_count"`
+	SkippedCount  int   `json:"skipped_count"`
+	DisabledIds   []int `json:"disabled_ids"`
+}
+
 func normalizeUserRiskIp(ip string) string {
 	return strings.TrimSpace(ip)
 }
@@ -90,7 +96,15 @@ func CheckAndUpsertIpRiskAlert(ip string) error {
 	}
 	userCount := countDistinctInts(registerUserIds, loginUserIds)
 	if userCount < userRiskIpThreshold {
-		return nil
+		var alert UserRiskAlert
+		err = DB.Where("ip = ?", ip).First(&alert).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return DB.Delete(&alert).Error
 	}
 
 	now := common.GetTimestamp()
@@ -215,6 +229,46 @@ func UpdateUserRiskAlertStatus(id int, status string) error {
 	}).Error
 }
 
+func DisableUserRiskAlertUsers(id int) (*DisableRiskAlertUsersResult, error) {
+	_, users, err := GetUserRiskAlertDetail(id)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DisableRiskAlertUsersResult{
+		DisabledIds: []int{},
+	}
+	for _, user := range users {
+		if user.Role != common.RoleCommonUser || user.Status != common.UserStatusEnabled {
+			result.SkippedCount++
+			continue
+		}
+		result.DisabledIds = append(result.DisabledIds, user.Id)
+	}
+	if len(result.DisabledIds) == 0 {
+		return result, nil
+	}
+
+	update := DB.Model(&User{}).
+		Where("id IN ? AND role = ? AND status = ?", result.DisabledIds, common.RoleCommonUser, common.UserStatusEnabled).
+		Update("status", common.UserStatusDisabled)
+	if update.Error != nil {
+		return nil, update.Error
+	}
+	result.DisabledCount = int(update.RowsAffected)
+
+	for _, userId := range result.DisabledIds {
+		if err := InvalidateUserCache(userId); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate user cache for risk disabled user %d: %s", userId, err.Error()))
+		}
+		if err := InvalidateUserTokensCache(userId); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for risk disabled user %d: %s", userId, err.Error()))
+		}
+	}
+
+	return result, nil
+}
+
 func IsUserIpRiskAlertEnabled() bool {
 	common.OptionMapRWMutex.RLock()
 	value, ok := common.OptionMap["UserIpRiskAlertEnabled"]
@@ -227,7 +281,7 @@ func IsUserIpRiskAlertEnabled() bool {
 
 func getRiskUserIdsByIp(ip string) ([]int, []int, error) {
 	var registerIds []int
-	if err := DB.Model(&User{}).Where("register_ip = ?", ip).Pluck("id", &registerIds).Error; err != nil {
+	if err := DB.Model(&User{}).Where("register_ip = ? AND role = ?", ip, common.RoleCommonUser).Pluck("id", &registerIds).Error; err != nil {
 		return nil, nil, err
 	}
 	registerIds = uniqueSortedInts(registerIds)
@@ -237,13 +291,21 @@ func getRiskUserIdsByIp(ip string) ([]int, []int, error) {
 	if err := DB.Model(&UserLoginIpLog{}).Where("ip = ?", ip).Pluck("user_id", &logLoginIds).Error; err != nil {
 		return nil, nil, err
 	}
+	logLoginIds = uniqueSortedInts(logLoginIds)
+	if len(logLoginIds) > 0 {
+		var commonLoginIds []int
+		if err := DB.Model(&User{}).Where("id IN ? AND role = ?", logLoginIds, common.RoleCommonUser).Pluck("id", &commonLoginIds).Error; err != nil {
+			return nil, nil, err
+		}
+		logLoginIds = commonLoginIds
+	}
 	for _, id := range logLoginIds {
 		if id > 0 {
 			loginSet[id] = struct{}{}
 		}
 	}
 	var lastLoginIds []int
-	if err := DB.Model(&User{}).Where("last_login_ip = ?", ip).Pluck("id", &lastLoginIds).Error; err != nil {
+	if err := DB.Model(&User{}).Where("last_login_ip = ? AND role = ?", ip, common.RoleCommonUser).Pluck("id", &lastLoginIds).Error; err != nil {
 		return nil, nil, err
 	}
 	for _, id := range lastLoginIds {

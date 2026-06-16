@@ -28,6 +28,7 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  DisableRiskAlertUsersResult,
   GetUserRiskAlertsParams,
   GetUserRiskAlertsResponse,
   RiskAlertStatus,
@@ -157,6 +158,13 @@ export async function updateUserRiskAlertStatus(
   status: RiskAlertStatus
 ): Promise<ApiResponse> {
   const res = await api.put(`/api/user/risk_alerts/${id}`, { status })
+  return res.data
+}
+
+export async function disableUserRiskAlertUsers(
+  id: number
+): Promise<ApiResponse<DisableRiskAlertUsersResult>> {
+  const res = await api.post(`/api/user/risk_alerts/${id}/disable_users`)
   return res.data
 }
 

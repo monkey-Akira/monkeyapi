@@ -152,6 +152,12 @@ export interface UserRiskAlertDetail {
   users: RiskAlertUser[]
 }
 
+export interface DisableRiskAlertUsersResult {
+  disabled_count: number
+  skipped_count: number
+  disabled_ids: number[]
+}
+
 export interface UserIpRiskAlertOption {
   enabled: boolean
 }
