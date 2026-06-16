@@ -33,6 +33,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	router.GET("/legacy", serveClassicIndex(assets.ClassicIndexPage))
 	router.GET("/legacy/", serveClassicIndex(assets.ClassicIndexPage))
 	router.GET("/legacy/channel", serveClassicIndex(assets.ClassicIndexPage))
+	router.GET("/legacy/model-pricing", serveClassicIndex(assets.ClassicIndexPage))
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")

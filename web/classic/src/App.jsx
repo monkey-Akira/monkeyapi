@@ -33,6 +33,7 @@ import PasswordResetForm from './components/auth/PasswordResetForm';
 import PasswordResetConfirm from './components/auth/PasswordResetConfirm';
 import Channel from './pages/Channel';
 import LegacyChannel from './pages/LegacyChannel';
+import LegacyModelPricing from './pages/LegacyModelPricing';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
@@ -137,6 +138,14 @@ function App() {
           element={
             <AdminRoute>
               <LegacyChannel />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/legacy/model-pricing'
+          element={
+            <AdminRoute>
+              <LegacyModelPricing />
             </AdminRoute>
           }
         />

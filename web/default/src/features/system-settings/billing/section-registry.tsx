@@ -50,6 +50,18 @@ const getGroupDefaults = (settings: BillingSettings) => ({
     settings['group_ratio_setting.group_special_usable_group'],
 })
 
+function LegacyModelPricingFrame() {
+  return (
+    <iframe
+      src='/legacy/model-pricing'
+      title='Model Pricing'
+      className='h-[calc(100svh-9rem)] min-h-[720px] w-full border-0 bg-white'
+      referrerPolicy='same-origin'
+      allow='clipboard-read; clipboard-write'
+    />
+  )
+}
+
 const BILLING_SECTIONS = [
   {
     id: 'quota',
@@ -106,15 +118,7 @@ const BILLING_SECTIONS = [
   {
     id: 'model-pricing',
     titleKey: 'Model Pricing',
-    build: (settings: BillingSettings) => (
-      <RatioSettingsCard
-        titleKey='Model Pricing'
-        modelDefaults={getModelDefaults(settings)}
-        groupDefaults={getGroupDefaults(settings)}
-        toolPricesDefault={settings['tool_price_setting.prices']}
-        visibleTabs={['models', 'unset-models', 'tool-prices', 'upstream-sync']}
-      />
-    ),
+    build: () => <LegacyModelPricingFrame />,
   },
   {
     id: 'group-pricing',
