@@ -165,6 +165,11 @@ export function PricingToolbar(props: PricingToolbarProps) {
     [props]
   )
 
+  const activePriceDisplayLabel =
+    props.priceDisplayOptions.find(
+      (option) => option.value === props.priceDisplayMode
+    )?.label ?? t('Price')
+
   return (
     <div className='rounded-xl border p-3'>
       <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
@@ -199,6 +204,44 @@ export function PricingToolbar(props: PricingToolbarProps) {
         </div>
 
         <div className='flex flex-wrap items-center gap-2'>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  aria-label={t('Price display mode')}
+                  className='h-8 max-w-full gap-1.5 px-3 text-xs sm:hidden'
+                />
+              }
+            >
+              <span className='shrink-0'>{t('Price')}</span>
+              <span className='text-muted-foreground max-w-20 truncate'>
+                {activePriceDisplayLabel}
+              </span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end' className='w-44'>
+              {props.priceDisplayOptions.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => handlePriceDisplayModeChange(option.value)}
+                  className='gap-2'
+                >
+                  <Check
+                    className={cn(
+                      'size-4 shrink-0',
+                      props.priceDisplayMode === option.value
+                        ? 'opacity-100'
+                        : 'opacity-0'
+                    )}
+                  />
+                  <span className='truncate'>{option.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <div className='hidden items-center gap-2 sm:flex'>
             <SegmentedControl
               options={props.priceDisplayOptions}
