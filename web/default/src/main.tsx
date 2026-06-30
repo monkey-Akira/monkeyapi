@@ -89,7 +89,6 @@ const queryClient = new QueryClient({
         }
         if (error.response?.status === 500) {
           toast.error(i18next.t('Internal Server Error!'))
-          router.navigate({ to: '/500' })
         }
       }
     },

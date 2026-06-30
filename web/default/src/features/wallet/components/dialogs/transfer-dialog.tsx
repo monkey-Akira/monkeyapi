@@ -49,14 +49,14 @@ export function TransferDialog({
   transferring,
 }: TransferDialogProps) {
   const { t } = useTranslation()
-  const [amount, setAmount] = useState(QUOTA_PER_DOLLAR)
+  const [amount, setAmount] = useState(availableQuota)
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAmount(QUOTA_PER_DOLLAR)
+      setAmount(availableQuota)
     }
-  }, [open])
+  }, [availableQuota, open])
 
   const handleConfirm = async () => {
     const success = await onConfirm(amount)
@@ -104,9 +104,6 @@ export function TransferDialog({
               step={QUOTA_PER_DOLLAR}
               className='font-mono text-lg'
             />
-            <p className='text-muted-foreground text-xs'>
-              {t('Minimum:')} {formatQuota(QUOTA_PER_DOLLAR)}
-            </p>
           </div>
         </div>
 

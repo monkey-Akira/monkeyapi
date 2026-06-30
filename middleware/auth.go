@@ -33,6 +33,38 @@ func validUserInfo(username string, role int) bool {
 	return true
 }
 
+func sessionInt(value any) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		if v == float64(int(v)) {
+			return int(v), true
+		}
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func sessionString(value any) (string, bool) {
+	v, ok := value.(string)
+	if !ok || strings.TrimSpace(v) == "" {
+		return "", false
+	}
+	return v, true
+}
+
+func clearInvalidSession(session sessions.Session) {
+	session.Clear()
+	_ = session.Save()
+}
+
 func authHelper(c *gin.Context, minRole int) {
 	session := sessions.Default(c)
 	username := session.Get("username")
@@ -92,6 +124,46 @@ func authHelper(c *gin.Context, minRole int) {
 			return
 		}
 	}
+	usernameStr, ok := sessionString(username)
+	if !ok {
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	roleInt, ok := sessionInt(role)
+	if !ok {
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	idInt, ok := sessionInt(id)
+	if !ok {
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	statusInt, ok := sessionInt(status)
+	if !ok {
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
 	// get header New-Api-User
 	apiUserIdStr := c.Request.Header.Get("New-Api-User")
 	if apiUserIdStr == "" {
@@ -112,7 +184,7 @@ func authHelper(c *gin.Context, minRole int) {
 		return
 
 	}
-	if id != apiUserId {
+	if idInt != apiUserId {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
@@ -120,7 +192,7 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if status.(int) == common.UserStatusDisabled {
+	if statusInt == common.UserStatusDisabled {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
@@ -128,7 +200,7 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if role.(int) < minRole {
+	if roleInt < minRole {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
@@ -136,7 +208,7 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if !validUserInfo(username.(string), role.(int)) {
+	if !validUserInfo(usernameStr, roleInt) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),
@@ -146,9 +218,9 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	// 防止不同newapi版本冲突，导致数据不通用
 	c.Header("Auth-Version", "864b7076dbcd0a3c01b5520316720ebf")
-	c.Set("username", username)
-	c.Set("role", role)
-	c.Set("id", id)
+	c.Set("username", usernameStr)
+	c.Set("role", roleInt)
+	c.Set("id", idInt)
 	c.Set("group", session.Get("group"))
 	c.Set("user_group", session.Get("group"))
 	c.Set("use_access_token", useAccessToken)
