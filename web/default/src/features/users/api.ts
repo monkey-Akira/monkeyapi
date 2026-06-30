@@ -29,6 +29,7 @@ import type {
   ManageUserQuotaPayload,
   ApiResponse,
   DisableRiskAlertUsersResult,
+  DisableUserInviteesResult,
   GetUserRiskAlertsParams,
   GetUserRiskAlertsResponse,
   RiskAlertStatus,
@@ -92,6 +93,13 @@ export async function getUserInvitees(
   const res = await api.get(
     `/api/user/${id}/invitees?p=${p}&page_size=${page_size}`
   )
+  return res.data
+}
+
+export async function disableUserInvitees(
+  id: number
+): Promise<ApiResponse<DisableUserInviteesResult>> {
+  const res = await api.post(`/api/user/${id}/invitees/disable`)
   return res.data
 }
 

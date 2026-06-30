@@ -282,6 +282,22 @@ func GetUserInvitees(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+func DisableUserInvitees(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	result, err := model.DisableUserInvitees(id, c.GetInt("role"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	common.ApiSuccess(c, result)
+}
+
 func GetUserRiskAlert(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

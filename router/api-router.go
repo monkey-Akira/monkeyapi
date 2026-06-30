@@ -135,6 +135,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.PUT("/risk_alerts/:id", middleware.RootAuth(), controller.UpdateUserRiskAlertStatus)
 				adminRoute.POST("/risk_alerts/:id/disable_users", middleware.RootAuth(), controller.DisableUserRiskAlertUsers)
 				adminRoute.GET("/:id/invitees", controller.GetUserInvitees)
+				adminRoute.POST("/:id/invitees/disable", controller.DisableUserInvitees)
 				adminRoute.GET("/:id/oauth/bindings", controller.GetUserOAuthBindingsByAdmin)
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)

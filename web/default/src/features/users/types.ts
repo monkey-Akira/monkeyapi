@@ -158,6 +158,13 @@ export interface DisableRiskAlertUsersResult {
   disabled_ids: number[]
 }
 
+export interface DisableUserInviteesResult {
+  disabled_count: number
+  skipped_count: number
+  disabled_ids: number[]
+  skipped_ids: number[]
+}
+
 export interface UserIpRiskAlertOption {
   enabled: boolean
 }

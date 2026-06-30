@@ -24,6 +24,16 @@ import { toast } from 'sonner'
 import { formatQuota, formatTimestamp } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -38,7 +48,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { StatusBadge } from '@/components/status-badge'
-import { getUserInvitees, manageUser } from '../api'
+import { disableUserInvitees, getUserInvitees, manageUser } from '../api'
 import { USER_STATUS, USER_STATUSES } from '../constants'
 import type { User } from '../types'
 import { useUsers } from './users-provider'
@@ -62,6 +72,7 @@ export function UserInviteesDialog(props: UserInviteesDialogProps) {
   const { triggerRefresh } = useUsers()
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(1)
+  const [bulkDisableConfirmOpen, setBulkDisableConfirmOpen] = useState(false)
 
   const affCount = props.user.aff_count || 0
   const inviteesQuery = useQuery({
@@ -99,9 +110,34 @@ export function UserInviteesDialog(props: UserInviteesDialogProps) {
     },
   })
 
+  const bulkDisableMutation = useMutation({
+    mutationFn: async () => {
+      const res = await disableUserInvitees(props.user.id)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to disable users'))
+      }
+      return res.data
+    },
+    onSuccess: (data) => {
+      toast.success(t('Disabled users') + `: ${data?.disabled_count ?? 0}`)
+      setBulkDisableConfirmOpen(false)
+      triggerRefresh()
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['user-invitees'] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : t('Operation failed')
+      )
+    },
+  })
+
   const invitees = inviteesQuery.data?.items || []
   const total = inviteesQuery.data?.total || 0
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const enabledInviteeCount = invitees.filter(
+    (invitee) => invitee.status === USER_STATUS.ENABLED
+  ).length
 
   return (
     <>
@@ -126,17 +162,33 @@ export function UserInviteesDialog(props: UserInviteesDialogProps) {
             </DialogTitle>
           </DialogHeader>
 
-          <div className='text-muted-foreground flex flex-wrap gap-3 text-xs'>
-            <span>
-              {t('Inviter ID')}: {props.user.id}
-            </span>
-            <span>
-              {t('Total invited users')}: {total}
-            </span>
-            <span>
-              {t('Invitation revenue')}:{' '}
-              {formatQuota(props.user.aff_history_quota || 0)}
-            </span>
+          <div className='flex flex-wrap items-center justify-between gap-3'>
+            <div className='text-muted-foreground flex flex-wrap gap-3 text-xs'>
+              <span>
+                {t('Inviter ID')}: {props.user.id}
+              </span>
+              <span>
+                {t('Total invited users')}: {total}
+              </span>
+              <span>
+                {t('Invitation revenue')}:{' '}
+                {formatQuota(props.user.aff_history_quota || 0)}
+              </span>
+            </div>
+            <Button
+              type='button'
+              size='sm'
+              variant='destructive'
+              disabled={
+                total === 0 ||
+                inviteesQuery.isLoading ||
+                bulkDisableMutation.isPending
+              }
+              onClick={() => setBulkDisableConfirmOpen(true)}
+            >
+              <Ban className='size-3.5' />
+              {t('Disable all invited users')}
+            </Button>
           </div>
 
           {inviteesQuery.isLoading && (
@@ -255,6 +307,34 @@ export function UserInviteesDialog(props: UserInviteesDialogProps) {
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={bulkDisableConfirmOpen}
+        onOpenChange={setBulkDisableConfirmOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Disable all invited users')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'This will disable all enabled invited users under this inviter that you are allowed to manage.'
+              )}{' '}
+              {t('Enabled users on current page')}: {enabledInviteeCount}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDisableMutation.isPending}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkDisableMutation.isPending || total === 0}
+              onClick={() => bulkDisableMutation.mutate()}
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+            >
+              {bulkDisableMutation.isPending ? t('Processing...') : t('Disable')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

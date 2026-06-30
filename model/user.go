@@ -239,6 +239,62 @@ func GetUsersByInviterId(inviterId int, pageInfo *common.PageInfo) (users []*Use
 	return users, total, nil
 }
 
+type DisableUserInviteesResult struct {
+	DisabledCount int   `json:"disabled_count"`
+	SkippedCount  int   `json:"skipped_count"`
+	DisabledIds   []int `json:"disabled_ids"`
+	SkippedIds    []int `json:"skipped_ids"`
+}
+
+func DisableUserInvitees(inviterId int, managerRole int) (*DisableUserInviteesResult, error) {
+	var invitees []*User
+	if err := DB.Unscoped().Where("inviter_id = ?", inviterId).Find(&invitees).Error; err != nil {
+		return nil, err
+	}
+
+	result := &DisableUserInviteesResult{
+		DisabledIds: []int{},
+		SkippedIds:  []int{},
+	}
+
+	for _, invitee := range invitees {
+		canManage := managerRole == common.RoleRootUser || managerRole > invitee.Role
+		if invitee.DeletedAt.Valid || invitee.Status != common.UserStatusEnabled || !canManage || invitee.Role == common.RoleRootUser {
+			result.SkippedIds = append(result.SkippedIds, invitee.Id)
+			continue
+		}
+		result.DisabledIds = append(result.DisabledIds, invitee.Id)
+	}
+
+	result.SkippedCount = len(result.SkippedIds)
+	if len(result.DisabledIds) == 0 {
+		return result, nil
+	}
+
+	update := DB.Model(&User{}).
+		Where("id IN ? AND status = ?", result.DisabledIds, common.UserStatusEnabled).
+		Where("role <> ?", common.RoleRootUser)
+	if managerRole != common.RoleRootUser {
+		update = update.Where("role < ?", managerRole)
+	}
+	if err := update.Update("status", common.UserStatusDisabled).Error; err != nil {
+		return nil, err
+	}
+
+	result.DisabledCount = int(update.RowsAffected)
+
+	for _, userId := range result.DisabledIds {
+		if err := InvalidateUserCache(userId); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate user cache for invitee %d: %s", userId, err.Error()))
+		}
+		if err := InvalidateUserTokensCache(userId); err != nil {
+			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for invitee %d: %s", userId, err.Error()))
+		}
+	}
+
+	return result, nil
+}
+
 func SearchUsers(keyword string, group string, role *int, status *int, startIdx int, num int) ([]*User, int64, error) {
 	var users []*User
 	var total int64
