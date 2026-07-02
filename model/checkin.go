@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -46,17 +45,42 @@ func HasCheckedInToday(userId int) (bool, error) {
 	return count > 0, err
 }
 
-func GetPreviousDayConsumeRequestCount(userId int) (int64, error) {
+func getPreviousDayTimeRange() (int64, int64) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	yesterdayStart := todayStart.AddDate(0, 0, -1)
+	return yesterdayStart.Unix(), todayStart.Unix()
+}
+
+func GetPreviousDayConsumeRequestCount(userId int) (int64, error) {
+	yesterdayStart, todayStart := getPreviousDayTimeRange()
 
 	var count int64
 	err := LOG_DB.Model(&Log{}).
 		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
-			userId, LogTypeConsume, yesterdayStart.Unix(), todayStart.Unix()).
+			userId, LogTypeConsume, yesterdayStart, todayStart).
 		Count(&count).Error
 	return count, err
+}
+
+func GetPreviousDayConsumeQuota(userId int) (int64, error) {
+	yesterdayStart, todayStart := getPreviousDayTimeRange()
+
+	var quota int64
+	err := LOG_DB.Model(&Log{}).
+		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
+			userId, LogTypeConsume, yesterdayStart, todayStart).
+		Select("COALESCE(SUM(quota), 0)").
+		Scan(&quota).Error
+	return quota, err
+}
+
+func HasUserRedeemedSingleQuotaAtLeast(userId int, minQuota int) (bool, error) {
+	var count int64
+	err := DB.Model(&Redemption{}).
+		Where("used_user_id = ? AND status = ? AND quota >= ?", userId, common.RedemptionCodeStatusUsed, minQuota).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func UserCheckin(userId int) (*Checkin, error) {
@@ -79,17 +103,48 @@ func UserCheckin(userId int) (*Checkin, error) {
 			return nil, err
 		}
 		if previousDayRequests < int64(setting.MinPreviousDayRequests) {
-			return nil, fmt.Errorf(
-				"昨天成功调用次数为 %d 次，少于签到要求的 %d 次。今天暂时不能签到，明天继续使用后再来领取奖励吧。",
-				previousDayRequests,
-				setting.MinPreviousDayRequests,
-			)
+			return nil, errors.New("未达到签到要求")
 		}
 	}
 
-	quotaAwarded := setting.MinQuota
-	if setting.MaxQuota > setting.MinQuota {
-		quotaAwarded = setting.MinQuota + rand.Intn(setting.MaxQuota-setting.MinQuota+1)
+	if setting.MinSingleRedemptionQuota > 0 {
+		qualified, err := HasUserRedeemedSingleQuotaAtLeast(userId, setting.MinSingleRedemptionQuota)
+		if err != nil {
+			return nil, err
+		}
+		if !qualified {
+			return nil, errors.New("未达到签到要求")
+		}
+	}
+
+	previousDayQuota, err := GetPreviousDayConsumeQuota(userId)
+	if err != nil {
+		return nil, err
+	}
+	if previousDayQuota <= int64(setting.MinQuota) {
+		return nil, errors.New("未达到签到要求")
+	}
+
+	minQuota := setting.MinQuota
+	maxQuota := setting.MaxQuota
+	previousDayQuotaLimit := int(previousDayQuota / 2)
+	if previousDayQuotaLimit < maxQuota {
+		maxQuota = previousDayQuotaLimit
+	}
+	if maxQuota < minQuota {
+		return nil, errors.New("未达到签到要求")
+	}
+	if setting.MaxQuota > 0 && previousDayQuota >= int64(setting.MaxQuota*5) {
+		highRangeMin := (setting.MaxQuota*9 + 9) / 10
+		if highRangeMin > minQuota {
+			minQuota = highRangeMin
+		}
+		maxQuota = setting.MaxQuota
+	}
+
+	quotaAwarded := minQuota
+	if maxQuota > minQuota {
+		quotaAwarded = minQuota + rand.Intn(maxQuota-minQuota+1)
 	}
 
 	today := time.Now().Format("2006-01-02")

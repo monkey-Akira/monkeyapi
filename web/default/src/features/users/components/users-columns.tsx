@@ -276,10 +276,33 @@ export function useUsersColumns(): ColumnDef<User>[] {
         const user = row.original
         const affHistoryQuota = user.aff_history_quota || 0
         const inviterId = user.inviter_id || 0
+        const affCode = user.aff_code || ''
+        const affCodeDisabled = user.aff_code_disabled === true
 
         return (
           <div className='flex items-center gap-1'>
             <UserInviteesDialog user={user} />
+            {affCode && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <StatusBadge
+                      label={`${t('Invite Code')}: ${affCode}`}
+                      variant={affCodeDisabled ? 'danger' : 'success'}
+                      copyText={affCode}
+                      className='cursor-help'
+                    />
+                  }
+                />
+                <TooltipContent>
+                  <p className='text-xs'>
+                    {affCodeDisabled
+                      ? t('This invite code is disabled')
+                      : t('This invite code is enabled')}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger
                 render={

@@ -46,6 +46,7 @@ const schema = z.object({
   minQuota: z.coerce.number().int().min(0),
   maxQuota: z.coerce.number().int().min(0),
   minPreviousDayRequests: z.coerce.number().int().min(0),
+  minSingleRedemptionQuota: z.coerce.number().int().min(0),
 })
 
 type Values = z.infer<typeof schema>
@@ -58,6 +59,7 @@ export function CheckinSettingsSection({
     minQuota: number
     maxQuota: number
     minPreviousDayRequests: number
+    minSingleRedemptionQuota: number
   }
 }) {
   const { t } = useTranslation()
@@ -70,6 +72,7 @@ export function CheckinSettingsSection({
       minQuota: defaultValues.minQuota,
       maxQuota: defaultValues.maxQuota,
       minPreviousDayRequests: defaultValues.minPreviousDayRequests,
+      minSingleRedemptionQuota: defaultValues.minSingleRedemptionQuota,
     },
   })
 
@@ -106,6 +109,16 @@ export function CheckinSettingsSection({
       updates.push({
         key: 'checkin_setting.min_previous_day_requests',
         value: String(values.minPreviousDayRequests),
+      })
+    }
+
+    if (
+      values.minSingleRedemptionQuota !==
+      defaultValues.minSingleRedemptionQuota
+    ) {
+      updates.push({
+        key: 'checkin_setting.min_single_redemption_quota',
+        value: String(values.minSingleRedemptionQuota),
       })
     }
 
@@ -156,7 +169,7 @@ export function CheckinSettingsSection({
           />
 
           {enabled && (
-            <div className='grid gap-6 sm:grid-cols-3'>
+            <div className='grid gap-6 sm:grid-cols-4'>
               <FormField
                 control={form.control}
                 name='minQuota'
@@ -220,6 +233,32 @@ export function CheckinSettingsSection({
                     <FormDescription>
                       {t(
                         'Users must reach this many successful calls yesterday before they can check in. Set 0 to disable this requirement.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='minSingleRedemptionQuota'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {t('Minimum single redemption quota')}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='number'
+                        min={0}
+                        placeholder={t('0')}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Users must have used at least one redemption code with this quota amount. Set 0 to disable this requirement.'
                       )}
                     </FormDescription>
                     <FormMessage />

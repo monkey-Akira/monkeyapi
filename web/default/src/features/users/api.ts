@@ -103,6 +103,14 @@ export async function disableUserInvitees(
   return res.data
 }
 
+export async function setUserAffCodeDisabled(
+  id: number,
+  disabled: boolean
+): Promise<ApiResponse<User>> {
+  const res = await api.put(`/api/user/${id}/aff-code-disabled`, { disabled })
+  return res.data
+}
+
 /**
  * Create a new user
  */

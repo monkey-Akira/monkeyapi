@@ -35,11 +35,12 @@ func GetCheckinStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"enabled":                   setting.Enabled,
-			"min_quota":                 setting.MinQuota,
-			"max_quota":                 setting.MaxQuota,
-			"min_previous_day_requests": setting.MinPreviousDayRequests,
-			"stats":                     stats,
+			"enabled":                     setting.Enabled,
+			"min_quota":                   setting.MinQuota,
+			"max_quota":                   setting.MaxQuota,
+			"min_previous_day_requests":   setting.MinPreviousDayRequests,
+			"min_single_redemption_quota": setting.MinSingleRedemptionQuota,
+			"stats":                       stats,
 		},
 	})
 }
@@ -68,6 +69,7 @@ func DoCheckin(c *gin.Context) {
 		"message": "签到成功",
 		"data": gin.H{
 			"quota_awarded": checkin.QuotaAwarded,
+			"max_quota":     setting.MaxQuota,
 			"checkin_date":  checkin.CheckinDate},
 	})
 }

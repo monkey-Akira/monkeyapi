@@ -42,6 +42,7 @@ type User struct {
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
 	AffCode          string         `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
+	AffCodeDisabled  bool           `json:"aff_code_disabled" gorm:"type:boolean;default:false;column:aff_code_disabled"`
 	AffCount         int            `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota         int            `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
 	AffHistoryQuota  int            `json:"aff_history_quota" gorm:"type:int;default:0;column:aff_history"` // 邀请历史额度
@@ -315,8 +316,8 @@ func SearchUsers(keyword string, group string, role *int, status *int, startIdx 
 	query := tx.Unscoped().Model(&User{})
 
 	// 构建搜索条件
-	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ?"
-	likeArgs := []interface{}{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
+	likeCondition := "username LIKE ? OR email LIKE ? OR display_name LIKE ? OR aff_code LIKE ?"
+	likeArgs := []interface{}{"%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%", "%" + keyword + "%"}
 
 	// 尝试将关键字转换为整数ID
 	keywordInt, err := strconv.Atoi(keyword)
@@ -380,6 +381,39 @@ func GetUserIdByAffCode(affCode string) (int, error) {
 	var user User
 	err := DB.Select("id").First(&user, "aff_code = ?", affCode).Error
 	return user.Id, err
+}
+
+func GetUserByAffCode(affCode string) (*User, error) {
+	if strings.TrimSpace(affCode) == "" {
+		return nil, errors.New("affCode ???")
+	}
+	var user User
+	err := DB.Omit("password").First(&user, "aff_code = ?", strings.TrimSpace(affCode)).Error
+	return &user, err
+}
+
+func GetInviterIdByAffCodeForRegister(affCode string) (int, error) {
+	if strings.TrimSpace(affCode) == "" {
+		return 0, nil
+	}
+	user, err := GetUserByAffCode(affCode)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if user.AffCodeDisabled {
+		return 0, errors.New("该邀请码因违规禁止注册，请使用其他邀请码")
+	}
+	return user.Id, nil
+}
+
+func UpdateUserAffCodeDisabled(id int, disabled bool) error {
+	if id == 0 {
+		return errors.New("id ???")
+	}
+	return DB.Model(&User{}).Where("id = ?", id).Update("aff_code_disabled", disabled).Error
 }
 
 func DeleteUserById(id int) (err error) {

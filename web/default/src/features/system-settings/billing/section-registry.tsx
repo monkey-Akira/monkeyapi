@@ -199,6 +199,8 @@ const BILLING_SECTIONS = [
           maxQuota: settings['checkin_setting.max_quota'],
           minPreviousDayRequests:
             settings['checkin_setting.min_previous_day_requests'],
+          minSingleRedemptionQuota:
+            settings['checkin_setting.min_single_redemption_quota'],
         }}
       />
     ),

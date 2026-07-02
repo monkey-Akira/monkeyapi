@@ -179,7 +179,11 @@ func Register(c *gin.Context) {
 		return
 	}
 	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+	inviterId, err := model.GetInviterIdByAffCodeForRegister(affCode)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
@@ -296,6 +300,56 @@ func DisableUserInvitees(c *gin.Context) {
 	}
 
 	common.ApiSuccess(c, result)
+}
+
+type AffCodeDisabledRequest struct {
+	Disabled bool `json:"disabled"`
+}
+
+func SetUserAffCodeDisabled(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	var req AffCodeDisabledRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	managerRole := c.GetInt("role")
+	if user.Role == common.RoleRootUser || (managerRole != common.RoleRootUser && managerRole <= user.Role) {
+		common.ApiErrorMsg(c, "无权修改该用户的邀请码状态")
+		return
+	}
+
+	if err := model.UpdateUserAffCodeDisabled(id, req.Disabled); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	user.AffCodeDisabled = req.Disabled
+	common.ApiSuccess(c, user)
+}
+
+func GetUserByAffCode(c *gin.Context) {
+	affCode := strings.TrimSpace(c.Query("aff_code"))
+	if affCode == "" {
+		common.ApiErrorMsg(c, "邀请码不能为空")
+		return
+	}
+	user, err := model.GetUserByAffCode(affCode)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, user)
 }
 
 func GetUserRiskAlert(c *gin.Context) {

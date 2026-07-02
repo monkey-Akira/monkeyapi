@@ -45,6 +45,7 @@ export const userSchema = z.object({
   request_count: z.number(),
   group: z.string(),
   aff_code: z.string().optional(),
+  aff_code_disabled: z.boolean().optional(),
   aff_count: z.number().optional(),
   aff_quota: z.number().optional(),
   aff_history_quota: z.number().optional(),

@@ -55,6 +55,25 @@ interface CheckinCalendarCardProps {
   turnstileSiteKey: string
 }
 
+type CheckinEffect =
+  | { type: 'jackpot'; quota: number }
+  | { type: 'mini'; quota: number }
+  | null
+
+const jackpotEmojis = ['\u{1F389}', '\u{1F38A}', '\u{2728}', '\u{1F4AB}', '\u{1F31F}', '\u{1F3C6}', '\u{1F451}']
+const jackpotConfetti = Array.from({ length: 42 }, (_, index) => ({
+  emoji: jackpotEmojis[index % jackpotEmojis.length],
+  left: `${(index * 17) % 100}%`,
+  delay: `${(index % 12) * 0.32}s`,
+  duration: `${4.6 + (index % 5) * 0.38}s`,
+  size: `${22 + (index % 5) * 5}px`,
+}))
+const miniSparkles = Array.from({ length: 12 }, (_, index) => ({
+  left: `${12 + ((index * 23) % 76)}%`,
+  top: `${12 + ((index * 19) % 68)}%`,
+  delay: `${(index % 5) * 0.08}s`,
+}))
+
 export function CheckinCalendarCard({
   checkinEnabled,
   turnstileEnabled,
@@ -70,6 +89,7 @@ export function CheckinCalendarCard({
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0)
   const [initialLoaded, setInitialLoaded] = useState(false)
   const [collapsed, setCollapsed] = useState<boolean>(false)
+  const [checkinEffect, setCheckinEffect] = useState<CheckinEffect>(null)
 
   const currentMonthStr = useMemo(() => {
     const y = currentMonth.getFullYear()
@@ -123,6 +143,15 @@ export function CheckinCalendarCard({
   const todayAward = checkinRecordsMap[todayString]
 
   useEffect(() => {
+    if (!checkinEffect) return
+    const timeout = window.setTimeout(
+      () => setCheckinEffect(null),
+      checkinEffect.type === 'jackpot' ? 10000 : 3000
+    )
+    return () => window.clearTimeout(timeout)
+  }, [checkinEffect])
+
+  useEffect(() => {
     if (initialLoaded) return
     if (isLoading) return
     if (!checkinData) return
@@ -145,9 +174,20 @@ export function CheckinCalendarCard({
       try {
         const res = await performCheckin(token)
         if (res.success && res.data) {
+          const quotaAwarded = res.data.quota_awarded
+          const maxQuota = res.data.max_quota || checkinData?.max_quota || 0
           toast.success(
-            `${t('Check-in successful! Received')} ${formatQuotaWithCurrency(res.data.quota_awarded)}`
+            `${t('Check-in successful! Received')} ${formatQuotaWithCurrency(quotaAwarded)}`
           )
+          if (maxQuota > 0 && quotaAwarded === maxQuota) {
+            setCheckinEffect({ type: 'jackpot', quota: quotaAwarded })
+          } else if (
+            maxQuota > 0 &&
+            quotaAwarded >= Math.ceil(maxQuota * 0.9) &&
+            quotaAwarded < maxQuota
+          ) {
+            setCheckinEffect({ type: 'mini', quota: quotaAwarded })
+          }
           refetch()
           setTurnstileModalVisible(false)
         } else {
@@ -170,7 +210,7 @@ export function CheckinCalendarCard({
         setCheckinLoading(false)
       }
     },
-    [refetch, shouldTriggerTurnstile, t, turnstileSiteKey]
+    [checkinData?.max_quota, refetch, shouldTriggerTurnstile, t, turnstileSiteKey]
   )
 
   const handlePrevMonth = () => {
@@ -245,6 +285,24 @@ export function CheckinCalendarCard({
 
   return (
     <TooltipProvider delay={100}>
+      <style>{`
+        @keyframes checkinJackpotFall {
+          0% { opacity: 0; transform: translateY(-18vh) rotate(0deg) scale(0.8); }
+          10% { opacity: 1; }
+          86% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(118vh) rotate(900deg) scale(1.08); }
+        }
+        @keyframes checkinJackpotPulse {
+          0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.45)); }
+          50% { transform: scale(1.04); filter: drop-shadow(0 0 34px rgba(250, 204, 21, 0.9)); }
+        }
+        @keyframes checkinMiniSpark {
+          0% { opacity: 0; transform: translateY(8px) scale(0.6); }
+          25% { opacity: 1; }
+          100% { opacity: 0; transform: translateY(-18px) scale(1.15); }
+        }
+      `}</style>
+
       <Dialog
         open={turnstileModalVisible}
         onOpenChange={(open) => {
@@ -276,7 +334,66 @@ export function CheckinCalendarCard({
         </DialogContent>
       </Dialog>
 
-      <div className='bg-card overflow-hidden rounded-2xl border'>
+      {checkinEffect?.type === 'jackpot' && (
+        <div className='fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/80 p-4 backdrop-blur-sm'>
+          {jackpotConfetti.map((item, index) => (
+            <span
+              key={index}
+              className='pointer-events-none fixed -top-16 select-none'
+              style={{
+                left: item.left,
+                fontSize: item.size,
+                animation: `checkinJackpotFall ${item.duration} linear ${item.delay} infinite`,
+              }}
+            >
+              {item.emoji}
+            </span>
+          ))}
+          <button
+            type='button'
+            aria-label={t('Close')}
+            className='absolute top-4 right-4 z-10 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-lg leading-none text-white shadow-lg transition hover:bg-white/20'
+            onClick={() => setCheckinEffect(null)}
+          >
+            {'\u00d7'}
+          </button>
+          <div className='relative z-10 w-full max-w-xl rounded-3xl border border-yellow-300/30 bg-zinc-950/80 p-8 text-center shadow-2xl shadow-yellow-500/20'>
+            <div className='mx-auto mb-5 flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-500 text-5xl font-black text-orange-950 shadow-[0_0_64px_rgba(250,204,21,0.55)] sm:h-40 sm:w-40 sm:text-6xl'>
+              {checkinEffect.quota}
+            </div>
+            <div
+              className='bg-gradient-to-b from-yellow-100 via-yellow-300 to-orange-400 bg-clip-text text-5xl font-black tracking-[0.12em] text-transparent sm:text-7xl'
+              style={{ animation: 'checkinJackpotPulse 1.8s ease-in-out infinite' }}
+            >
+              欧皇降临
+            </div>
+            <p className='mt-5 text-base font-medium text-white/80 sm:text-lg'>
+              恭喜你抽中今日签到封顶奖励！
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className='bg-card relative overflow-hidden rounded-2xl border'>
+        {checkinEffect?.type === 'mini' && (
+          <div className='pointer-events-none absolute top-4 right-4 z-20 rounded-2xl border border-yellow-300/30 bg-yellow-400/15 px-4 py-3 text-right shadow-lg shadow-yellow-500/10 backdrop-blur'>
+            {miniSparkles.map((item, index) => (
+              <span
+                key={index}
+                className='absolute h-1.5 w-1.5 rounded-full bg-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.9)]'
+                style={{
+                  left: item.left,
+                  top: item.top,
+                  animation: `checkinMiniSpark 1.1s ease-out ${item.delay} 2`,
+                }}
+              />
+            ))}
+            <div className='relative text-sm font-bold text-yellow-300'>小欧一下</div>
+            <div className='relative mt-0.5 text-xs text-yellow-100/80'>
+              +{formatQuotaWithCurrency(checkinEffect.quota)}
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className='border-b p-4 sm:p-6'>
           <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4'>

@@ -44,7 +44,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
-import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
+import {
+  manageUser,
+  resetUserPasskey,
+  resetUserTwoFA,
+  setUserAffCodeDisabled,
+} from '../api'
 import {
   USER_STATUS,
   USER_ROLE,
@@ -68,6 +73,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
   const [subscriptionsDialogOpen, setSubscriptionsDialogOpen] = useState(false)
+  const [affCodeConfirmOpen, setAffCodeConfirmOpen] = useState(false)
 
   const handleEdit = () => {
     setCurrentRow(user)
@@ -127,9 +133,29 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     }
   }
 
+  const handleToggleAffCodeDisabled = async () => {
+    const disabled = user.aff_code_disabled !== true
+    try {
+      const result = await setUserAffCodeDisabled(user.id, disabled)
+      if (result.success) {
+        toast.success(
+          disabled ? t('Invite code disabled') : t('Invite code enabled')
+        )
+        triggerRefresh()
+      } else {
+        toast.error(result.message || t('Failed to update invite code status'))
+      }
+    } catch (_error) {
+      toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+    } finally {
+      setAffCodeConfirmOpen(false)
+    }
+  }
+
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
   const isRoot = user.role === USER_ROLE.ROOT
+  const isAffCodeDisabled = user.aff_code_disabled === true
 
   if (isUserDeleted(user)) {
     return null
@@ -220,6 +246,21 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault()
+              setAffCodeConfirmOpen(true)
+            }}
+            disabled={isRoot || !user.aff_code}
+          >
+            {isAffCodeDisabled
+              ? t('Enable Invite Code')
+              : t('Disable Invite Code')}
+            <DropdownMenuShortcut>
+              <KeyRound size={16} />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
@@ -279,6 +320,24 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         desc={`Reset 2FA for ${user.username}? The user must set up 2FA again to continue using it.`}
         confirmText='Reset 2FA'
         handleConfirm={handleResetTwoFA}
+      />
+
+      <ConfirmDialog
+        open={affCodeConfirmOpen}
+        onOpenChange={setAffCodeConfirmOpen}
+        title={
+          isAffCodeDisabled ? t('Enable Invite Code') : t('Disable Invite Code')
+        }
+        desc={
+          isAffCodeDisabled
+            ? `${t('Enable invite code')} ${user.aff_code || '-'} ${t('for')} ${user.username}?`
+            : `${t('Disable invite code')} ${user.aff_code || '-'} ${t('for')} ${user.username}? ${t('New users using this invite code will be blocked from registration.')}`
+        }
+        confirmText={
+          isAffCodeDisabled ? 'Enable Invite Code' : 'Disable Invite Code'
+        }
+        destructive={!isAffCodeDisabled}
+        handleConfirm={handleToggleAffCodeDisabled}
       />
 
       <UserBindingDialog
