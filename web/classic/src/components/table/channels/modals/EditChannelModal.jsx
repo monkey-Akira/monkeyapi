@@ -1785,11 +1785,15 @@ const EditChannelModal = (props) => {
       delete settings.vertex_key_type;
     }
 
-    // type === 1 (OpenAI) 或 type === 14 (Claude): 设置字段透传控制（显式保存布尔值）
-    if (localInputs.type === 1 || localInputs.type === 14) {
+    // OpenAI, Claude and Codex: save field passthrough controls explicitly.
+    if (
+      localInputs.type === 1 ||
+      localInputs.type === 14 ||
+      localInputs.type === 57
+    ) {
       settings.allow_service_tier = localInputs.allow_service_tier === true;
-      // 仅 OpenAI 渠道需要 store / safety_identifier / include_obfuscation
-      if (localInputs.type === 1) {
+      // OpenAI and Codex use Responses-specific field controls.
+      if (localInputs.type === 1 || localInputs.type === 57) {
         settings.disable_store = localInputs.disable_store === true;
         settings.allow_safety_identifier =
           localInputs.allow_safety_identifier === true;
@@ -2485,7 +2489,7 @@ const EditChannelModal = (props) => {
                     </Col>
                   </Row>
 
-                  {inputs.type === 1 && (
+                  {(inputs.type === 1 || inputs.type === 57) && (
                     <>
                       <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
                         {t('字段透传控制')}

@@ -40,13 +40,18 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 	case *dto.OpenAIResponsesRequest:
 		responsesReq = req
 	case *dto.OpenAIResponsesCompactionRequest:
+		// Forward the documented compact cache fields while retaining the
+		// compatibility fields required by Codex clients.
 		responsesReq = &dto.OpenAIResponsesRequest{
-			Model:              req.Model,
-			Input:              req.Input,
-			Instructions:       req.Instructions,
-			PreviousResponseID: req.PreviousResponseID,
-			ParallelToolCalls:  req.ParallelToolCalls,
-			ServiceTier:        req.ServiceTier,
+			Model:                req.Model,
+			Input:                req.Input,
+			Instructions:         req.Instructions,
+			PreviousResponseID:   req.PreviousResponseID,
+			ParallelToolCalls:    req.ParallelToolCalls,
+			ServiceTier:          req.ServiceTier,
+			PromptCacheKey:       req.PromptCacheKey,
+			PromptCacheOptions:   req.PromptCacheOptions,
+			PromptCacheRetention: req.PromptCacheRetention,
 		}
 	default:
 		return types.NewErrorWithStatusCode(

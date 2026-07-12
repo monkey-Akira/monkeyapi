@@ -279,9 +279,22 @@ func TestChannelAffinityHitCodexTemplatePassHeadersEffective(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		RequestHeaders: map[string]string{
-			"Originator": "Codex CLI",
-			"Session_id": "sess-123",
-			"User-Agent": "codex-cli-test",
+			"Originator":                             "Codex CLI",
+			"Session_id":                             "legacy-session",
+			"Thread_id":                              "legacy-thread",
+			"Session-Id":                             "session-123",
+			"Thread-Id":                              "thread-123",
+			"X-Client-Request-Id":                    "request-123",
+			"User-Agent":                             "codex-cli-test",
+			"X-Codex-Beta-Features":                  "feature-a",
+			"X-Codex-Turn-State":                     "turn-state-123",
+			"X-Codex-Turn-Metadata":                  "turn-metadata-123",
+			"X-Codex-Window-Id":                      "window-123",
+			"X-Codex-Parent-Thread-Id":               "parent-123",
+			"X-OpenAI-Subagent":                      "subagent-123",
+			"X-OpenAI-Memgen-Request":                "true",
+			"X-ResponsesAPI-Include-Timing-Metrics":  "true",
+			"X-OpenAI-Internal-Codex-Responses-Lite": "true",
 		},
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ParamOverride: mergedOverride,
@@ -296,12 +309,25 @@ func TestChannelAffinityHitCodexTemplatePassHeadersEffective(t *testing.T) {
 	require.True(t, info.UseRuntimeHeadersOverride)
 
 	require.Equal(t, "legacy-static", info.RuntimeHeadersOverride["x-static"])
-	require.Equal(t, "Codex CLI", info.RuntimeHeadersOverride["originator"])
-	require.Equal(t, "sess-123", info.RuntimeHeadersOverride["session_id"])
-	require.Equal(t, "codex-cli-test", info.RuntimeHeadersOverride["user-agent"])
-
-	_, exists := info.RuntimeHeadersOverride["x-codex-beta-features"]
-	require.False(t, exists)
-	_, exists = info.RuntimeHeadersOverride["x-codex-turn-metadata"]
-	require.False(t, exists)
+	expectedHeaders := map[string]string{
+		"originator":                             "Codex CLI",
+		"session_id":                             "legacy-session",
+		"thread_id":                              "legacy-thread",
+		"session-id":                             "session-123",
+		"thread-id":                              "thread-123",
+		"x-client-request-id":                    "request-123",
+		"user-agent":                             "codex-cli-test",
+		"x-codex-beta-features":                  "feature-a",
+		"x-codex-turn-state":                     "turn-state-123",
+		"x-codex-turn-metadata":                  "turn-metadata-123",
+		"x-codex-window-id":                      "window-123",
+		"x-codex-parent-thread-id":               "parent-123",
+		"x-openai-subagent":                      "subagent-123",
+		"x-openai-memgen-request":                "true",
+		"x-responsesapi-include-timing-metrics":  "true",
+		"x-openai-internal-codex-responses-lite": "true",
+	}
+	for name, expected := range expectedHeaders {
+		require.Equal(t, expected, info.RuntimeHeadersOverride[name], name)
+	}
 }
