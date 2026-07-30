@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -120,6 +121,60 @@ func TestRelayErrorHandlerKeepsOpenAIErrorMessage(t *testing.T) {
 
 	require.NotNil(t, newAPIError)
 	require.Equal(t, message, newAPIError.Error())
+}
+
+func TestRelayErrorHandlerSeparatesLocalAndUpstreamQuotaMessages(t *testing.T) {
+	const enabledKey = "error_message_setting.enabled"
+	const mappingsKey = "error_message_setting.mappings"
+	const detailedMessage = "预扣费额度失败, 用户剩余额度: 🍚1.000000, 需要预扣费额度: 🍚9.000000"
+	const localMessage = "额度不足，请充值后再试。"
+	const upstreamMessage = "当前模型线路暂时不可用，请稍后再试。"
+
+	common.OptionMapRWMutex.Lock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	originalEnabled, hadEnabled := common.OptionMap[enabledKey]
+	originalMappings, hadMappings := common.OptionMap[mappingsKey]
+	common.OptionMap[enabledKey] = "true"
+	common.OptionMap[mappingsKey] = `{"insufficient_user_quota":"额度不足，请充值后再试。","upstream:insufficient_user_quota":"当前模型线路暂时不可用，请稍后再试。"}`
+	common.OptionMapRWMutex.Unlock()
+
+	t.Cleanup(func() {
+		common.OptionMapRWMutex.Lock()
+		defer common.OptionMapRWMutex.Unlock()
+		if hadEnabled {
+			common.OptionMap[enabledKey] = originalEnabled
+		} else {
+			delete(common.OptionMap, enabledKey)
+		}
+		if hadMappings {
+			common.OptionMap[mappingsKey] = originalMappings
+		} else {
+			delete(common.OptionMap, mappingsKey)
+		}
+	})
+
+	localErr := types.NewErrorWithStatusCode(
+		errors.New(detailedMessage),
+		types.ErrorCodeInsufficientUserQuota,
+		http.StatusForbidden,
+	)
+	require.Equal(t, localMessage, localErr.ToOpenAIError().Message)
+
+	body := `{"error":{"message":"` + detailedMessage + `","type":"new_api_error","param":"","code":"insufficient_user_quota"}}`
+	resp := &http.Response{
+		StatusCode: http.StatusForbidden,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+	upstreamErr := RelayErrorHandler(context.Background(), resp, false)
+
+	require.Equal(t, detailedMessage, upstreamErr.Error())
+	require.Equal(t, http.StatusForbidden, upstreamErr.StatusCode)
+	openAIError := upstreamErr.ToOpenAIError()
+	require.Equal(t, upstreamMessage, openAIError.Message)
+	require.Equal(t, string(types.ErrorCodeInsufficientUserQuota), openAIError.Code)
+	require.Equal(t, upstreamMessage, upstreamErr.ToClaudeError().Message)
 }
 
 func TestRelayErrorHandlerKeepsInvalidJSONBodyInDebugLog(t *testing.T) {

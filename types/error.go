@@ -92,6 +92,7 @@ type NewAPIError struct {
 	RelayError     any
 	skipRetry      bool
 	recordErrorLog *bool
+	upstreamError  bool
 	errorType      ErrorType
 	errorCode      ErrorCode
 	StatusCode     int
@@ -177,6 +178,16 @@ func (e *NewAPIError) SetMessage(message string) {
 	e.Err = errors.New(message)
 }
 
+func (e *NewAPIError) applyCustomErrorMessage(errorCode string, currentMessage string) string {
+	errorCode = strings.TrimSpace(errorCode)
+	if e != nil && e.upstreamError && errorCode != "" {
+		if customMessage := common.GetCustomErrorMessage("upstream:" + errorCode); customMessage != "" {
+			return customMessage
+		}
+	}
+	return common.ApplyCustomErrorMessage(errorCode, currentMessage)
+}
+
 func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	var result OpenAIError
 	switch e.errorType {
@@ -211,7 +222,7 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Code != nil {
 		errorCode = fmt.Sprintf("%v", result.Code)
 	}
-	result.Message = common.ApplyCustomErrorMessage(errorCode, result.Message)
+	result.Message = e.applyCustomErrorMessage(errorCode, result.Message)
 	return result
 }
 
@@ -241,7 +252,7 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
-	result.Message = common.ApplyCustomErrorMessage(string(e.errorCode), result.Message)
+	result.Message = e.applyCustomErrorMessage(string(e.errorCode), result.Message)
 	return result
 }
 
@@ -393,6 +404,12 @@ func ErrOptionWithSkipRetry() NewAPIErrorOptions {
 func ErrOptionWithNoRecordErrorLog() NewAPIErrorOptions {
 	return func(e *NewAPIError) {
 		e.recordErrorLog = common.GetPointer(false)
+	}
+}
+
+func ErrOptionWithUpstreamError() NewAPIErrorOptions {
+	return func(e *NewAPIError) {
+		e.upstreamError = true
 	}
 }
 

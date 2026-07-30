@@ -40,6 +40,8 @@ type ErrorMessageRow = {
 const DEFAULT_ERROR_MESSAGES: Record<string, string> = {
   insufficient_user_quota:
     '\u989d\u5ea6\u4e0d\u8db3\uff0c\u8bf7\u5145\u503c\u540e\u518d\u8bd5\u3002',
+  'upstream:insufficient_user_quota':
+    '\u5f53\u524d\u6a21\u578b\u7ebf\u8def\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
   pre_consume_token_quota_failed:
     '\u989d\u5ea6\u9884\u6263\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002',
   'channel:no_available_key':
