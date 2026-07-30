@@ -66,6 +66,26 @@ const (
 	LogTypeRefund  = 6
 )
 
+func applyUserErrorMessage(log *Log, otherMap map[string]interface{}) {
+	if log == nil || log.Type != LogTypeError || otherMap == nil {
+		return
+	}
+	errorCode, ok := otherMap["error_code"].(string)
+	if !ok || errorCode == "" {
+		return
+	}
+	customMessage := common.GetCustomErrorMessage("upstream:" + errorCode)
+	if customMessage == "" {
+		return
+	}
+	statusCode, ok := otherMap["status_code"].(float64)
+	if ok && statusCode > 0 {
+		log.Content = fmt.Sprintf("status_code=%d, %s", int(statusCode), customMessage)
+		return
+	}
+	log.Content = customMessage
+}
+
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
@@ -78,6 +98,7 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			delete(otherMap, "stream_status")
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
+		applyUserErrorMessage(logs[i], otherMap)
 		logs[i].Id = startIdx + i + 1
 	}
 }
