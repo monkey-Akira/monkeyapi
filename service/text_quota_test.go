@@ -68,6 +68,41 @@ func TestCalculateTextQuotaSummaryUnifiedForClaudeSemantic(t *testing.T) {
 	require.Equal(t, 1488, chatSummary.Quota)
 }
 
+func TestIsTextGenerationForEmptyResponseRefund(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	usage := &dto.Usage{PromptTokens: 100, CompletionTokens: 0}
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:     types.RelayFormatOpenAI,
+		OriginModelName: "text-model",
+		Request:         &dto.GeneralOpenAIRequest{},
+	}
+
+	require.True(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+
+	relayInfo.RelayFormat = types.RelayFormatEmbedding
+	require.False(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+
+	relayInfo.RelayFormat = types.RelayFormatOpenAI
+	relayInfo.Request = &dto.GeneralOpenAIRequest{Modalities: []byte(`["text","audio"]`)}
+	require.False(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+
+	relayInfo.Request = &dto.GeneralOpenAIRequest{}
+	usage.CompletionTokenDetails.ImageTokens = 100
+	require.False(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+
+	usage.CompletionTokenDetails.ImageTokens = 0
+	usage.PromptTokensDetails.AudioTokens = 100
+	require.False(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+
+	usage.PromptTokensDetails.AudioTokens = 0
+	relayInfo.RelayFormat = types.RelayFormatOpenAIResponses
+	relayInfo.Request = &dto.OpenAIResponsesRequest{
+		Tools: []byte(`[{"type":"image_generation"}]`),
+	}
+	require.False(t, isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage))
+}
+
 func TestCalculateTextQuotaSummaryUsesSplitClaudeCacheCreationRatios(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()

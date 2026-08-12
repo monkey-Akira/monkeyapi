@@ -3,6 +3,7 @@ package common
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/stretchr/testify/require"
 )
@@ -37,4 +38,24 @@ func TestRelayInfoGetFinalRequestRelayFormatFallsBackToRelayFormat(t *testing.T)
 func TestRelayInfoGetFinalRequestRelayFormatNilReceiver(t *testing.T) {
 	var info *RelayInfo
 	require.Equal(t, types.RelayFormat(""), info.GetFinalRequestRelayFormat())
+}
+
+func TestRequestedZeroMaxOutputUsesEffectiveOpenAIField(t *testing.T) {
+	zero := uint(0)
+	nonZero := uint(128)
+	require.True(t, requestedZeroMaxOutput(&dto.GeneralOpenAIRequest{MaxTokens: &zero}))
+	require.True(t, requestedZeroMaxOutput(&dto.GeneralOpenAIRequest{MaxCompletionTokens: &zero}))
+	require.False(t, requestedZeroMaxOutput(&dto.GeneralOpenAIRequest{
+		MaxTokens:           &zero,
+		MaxCompletionTokens: &nonZero,
+	}))
+}
+
+func TestRequestedZeroMaxOutputSupportsResponsesClaudeAndGemini(t *testing.T) {
+	zero := uint(0)
+	require.True(t, requestedZeroMaxOutput(&dto.OpenAIResponsesRequest{MaxOutputTokens: &zero}))
+	require.True(t, requestedZeroMaxOutput(&dto.ClaudeRequest{MaxTokens: &zero}))
+	require.True(t, requestedZeroMaxOutput(&dto.GeminiChatRequest{
+		GenerationConfig: dto.GeminiChatGenerationConfig{MaxOutputTokens: &zero},
+	}))
 }

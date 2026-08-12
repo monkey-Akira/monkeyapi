@@ -183,6 +183,10 @@ export interface LogOtherData {
   is_task?: boolean
   task_id?: string
   reason?: string
+  empty_response_detected?: boolean
+  empty_response_refund_mode?: string
+  empty_response_refund?: boolean
+  empty_response_planned_quota?: number
   // Subscription billing fields
   subscription_plan_id?: string
   subscription_plan_title?: string

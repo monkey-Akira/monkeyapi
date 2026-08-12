@@ -41,6 +41,22 @@ func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, re
 
 	// 计算使用量（基于 UsageMetadata）
 	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
+	hasTextOutput, hasNonTextOutput := geminiResponseOutputState(&geminiResponse)
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, &usage, hasNonTextOutput); customText != "" && !hasTextOutput && geminiResponse.PromptFeedback == nil {
+		stopReason := "STOP"
+		geminiResponse.Candidates = []dto.GeminiChatCandidate{{
+			Index:        0,
+			FinishReason: &stopReason,
+			Content: dto.GeminiChatContent{
+				Role:  "model",
+				Parts: []dto.GeminiPart{{Text: customText}},
+			},
+		}}
+		responseBody, err = common.Marshal(geminiResponse)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
+	}
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
@@ -81,7 +97,19 @@ func NativeGeminiEmbeddingHandler(c *gin.Context, resp *http.Response, info *rel
 func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	helper.SetEventStreamHeaders(c)
 
-	return geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
+	hasTextOutput := false
+	hasNonTextOutput := false
+	var pendingFinalResponse *dto.GeminiChatResponse
+	var pendingFinalData string
+	usage, newAPIError := geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
+		textOutput, nonTextOutput := geminiResponseOutputState(geminiResponse)
+		hasTextOutput = hasTextOutput || textOutput
+		hasNonTextOutput = hasNonTextOutput || nonTextOutput
+		if geminiResponseIsFinished(geminiResponse) {
+			pendingFinalResponse = geminiResponse
+			pendingFinalData = data
+			return true
+		}
 		err := helper.StringData(c, data)
 		if err != nil {
 			logger.LogError(c, "failed to write stream data: "+err.Error())
@@ -90,4 +118,43 @@ func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayIn
 		info.SendResponseCount++
 		return true
 	})
+	if newAPIError != nil {
+		return usage, newAPIError
+	}
+	customText := service.GetEmptyResponseRefundCustomText(c, info, usage, hasNonTextOutput)
+	if customText != "" && !hasTextOutput {
+		stopReason := "STOP"
+		customResponse := dto.GeminiChatResponse{
+			Candidates: []dto.GeminiChatCandidate{{
+				Index:        0,
+				FinishReason: &stopReason,
+				Content: dto.GeminiChatContent{
+					Role:  "model",
+					Parts: []dto.GeminiPart{{Text: customText}},
+				},
+			}},
+		}
+		if pendingFinalResponse != nil {
+			customResponse.UsageMetadata = pendingFinalResponse.UsageMetadata
+		}
+		data, err := common.Marshal(customResponse)
+		if err == nil {
+			_ = helper.StringData(c, string(data))
+		}
+	} else if pendingFinalResponse != nil {
+		_ = helper.StringData(c, pendingFinalData)
+	}
+	return usage, nil
+}
+
+func geminiResponseIsFinished(response *dto.GeminiChatResponse) bool {
+	if response == nil {
+		return false
+	}
+	for _, candidate := range response.Candidates {
+		if candidate.FinishReason != nil && *candidate.FinishReason != "" {
+			return true
+		}
+	}
+	return false
 }

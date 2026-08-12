@@ -1403,13 +1403,20 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 	finishReason := constant.FinishReasonStop
 	toolCallIndexByChoice := make(map[int]map[string]int)
 	nextToolCallIndexByChoice := make(map[int]int)
+	hasTextOutput := false
+	hasNonTextOutput := false
+	responseFinished := false
 
 	usage, err := geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
-		response, isStop := streamResponseGeminiChat2OpenAI(geminiResponse)
+		textOutput, nonTextOutput := geminiResponseOutputState(geminiResponse)
+		hasTextOutput = hasTextOutput || textOutput
+		hasNonTextOutput = hasNonTextOutput || nonTextOutput
+		response, _ := streamResponseGeminiChat2OpenAI(geminiResponse)
 
 		response.Id = id
 		response.Created = createAt
 		response.Model = info.UpstreamModelName
+		responseFinished = responseFinished || response.IsFinished()
 		if response.IsToolCall() {
 			finishReason = constant.FinishReasonToolCalls
 			if info.RelayFormat == types.RelayFormatClaude {
@@ -1477,11 +1484,6 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 		if err != nil {
 			logger.LogError(c, err.Error())
 		}
-		if isStop {
-			if info.RelayFormat != types.RelayFormatClaude {
-				_ = handleStream(c, info, helper.GenerateStopResponse(id, createAt, info.UpstreamModelName, finishReason))
-			}
-		}
 		return true
 	})
 
@@ -1489,8 +1491,24 @@ func GeminiChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *
 		return usage, err
 	}
 
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, usage, hasNonTextOutput); customText != "" && !hasTextOutput {
+		response := &dto.ChatCompletionsStreamResponse{
+			Id:      id,
+			Object:  "chat.completion.chunk",
+			Created: createAt,
+			Model:   info.UpstreamModelName,
+			Choices: []dto.ChatCompletionsStreamResponseChoice{{
+				Index: 0,
+				Delta: dto.ChatCompletionsStreamResponseChoiceDelta{Content: &customText},
+			}},
+		}
+		if handleErr := handleStream(c, info, response); handleErr != nil {
+			common.SysLog("send custom empty response failed: " + handleErr.Error())
+		}
+	}
+
 	response := helper.GenerateFinalUsageResponse(id, createAt, info.UpstreamModelName, *usage)
-	if info.RelayFormat == types.RelayFormatClaude && info.ClaudeConvertInfo != nil && !info.ClaudeConvertInfo.Done {
+	if !responseFinished {
 		response = helper.GenerateStopResponse(id, createAt, info.UpstreamModelName, finishReason)
 		response.Usage = usage
 	}
@@ -1513,8 +1531,24 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
+	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
+	hasTextOutput, hasNonTextOutput := geminiResponseOutputState(&geminiResponse)
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, &usage, hasNonTextOutput); customText != "" && !hasTextOutput && geminiResponse.PromptFeedback == nil {
+		stopReason := "STOP"
+		geminiResponse.Candidates = []dto.GeminiChatCandidate{{
+			Index:        0,
+			FinishReason: &stopReason,
+			Content: dto.GeminiChatContent{
+				Role:  "model",
+				Parts: []dto.GeminiPart{{Text: customText}},
+			},
+		}}
+		responseBody, err = common.Marshal(geminiResponse)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
+	}
 	if len(geminiResponse.Candidates) == 0 {
-		usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
 
 		var newAPIError *types.NewAPIError
 		if geminiResponse.PromptFeedback != nil && geminiResponse.PromptFeedback.BlockReason != nil {
@@ -1550,7 +1584,6 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	}
 	fullTextResponse := responseGeminiChat2OpenAI(c, &geminiResponse)
 	fullTextResponse.Model = info.UpstreamModelName
-	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
 
 	fullTextResponse.Usage = usage
 
@@ -1574,6 +1607,29 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil
+}
+
+func geminiResponseOutputState(response *dto.GeminiChatResponse) (hasText bool, hasNonText bool) {
+	if response == nil {
+		return false, false
+	}
+	if response.PromptFeedback != nil {
+		hasNonText = true
+	}
+	for _, candidate := range response.Candidates {
+		if candidate.FinishReason != nil && *candidate.FinishReason != "" && *candidate.FinishReason != "STOP" {
+			hasNonText = true
+		}
+		for _, part := range candidate.Content.Parts {
+			if part.Text != "" {
+				hasText = true
+			}
+			if part.InlineData != nil || part.FunctionCall != nil || part.ExecutableCode != nil || part.CodeExecutionResult != nil {
+				hasNonText = true
+			}
+		}
+	}
+	return hasText, hasNonText
 }
 
 func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {

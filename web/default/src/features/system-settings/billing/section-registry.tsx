@@ -24,6 +24,7 @@ import { PaymentSettingsSection } from '../integrations/payment-settings-section
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { EmptyResponseRefundSection } from './empty-response-refund-section'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -112,6 +113,22 @@ const BILLING_SECTIONS = [
               settings['general_setting.custom_currency_exchange_rate'] ?? 1,
           },
         }}
+      />
+    ),
+  },
+  {
+    id: 'empty-response-refund',
+    titleKey: 'Empty Response Refund',
+    build: (settings: BillingSettings) => (
+      <EmptyResponseRefundSection
+        defaultMode={settings['empty_response_refund_setting.mode']}
+        defaultModels={settings['empty_response_refund_setting.models']}
+        defaultCustomResponseEnabled={
+          settings['empty_response_refund_setting.custom_response_enabled']
+        }
+        defaultCustomResponseText={
+          settings['empty_response_refund_setting.custom_response_text']
+        }
       />
     ),
   },

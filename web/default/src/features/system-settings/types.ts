@@ -194,6 +194,10 @@ export type BillingSettings = {
   TopUpLinkDescription: string
   'general_setting.docs_link': string
   'quota_setting.enable_free_model_pre_consume': boolean
+  'empty_response_refund_setting.mode': string
+  'empty_response_refund_setting.models': string
+  'empty_response_refund_setting.custom_response_enabled': boolean
+  'empty_response_refund_setting.custom_response_text': string
   QuotaPerUnit: number
   USDExchangeRate: number
   'general_setting.quota_display_type': string

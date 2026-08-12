@@ -13,6 +13,8 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -319,6 +321,192 @@ func usageSemanticFromUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) 
 	return "openai"
 }
 
+func responsesRequestUsesImageGeneration(request *dto.OpenAIResponsesRequest) bool {
+	if request == nil || len(request.Tools) == 0 {
+		return false
+	}
+	var tools []map[string]interface{}
+	if err := common.Unmarshal(request.Tools, &tools); err != nil {
+		// A malformed or unknown tool declaration is not safe to treat as text-only.
+		return true
+	}
+	for _, tool := range tools {
+		toolType, _ := tool["type"].(string)
+		if strings.EqualFold(strings.TrimSpace(toolType), "image_generation") {
+			return true
+		}
+	}
+	return false
+}
+
+func isTextGenerationForEmptyResponseRefund(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
+	if ctx == nil || relayInfo == nil || usage == nil || ctx.GetBool("image_generation_call") {
+		return false
+	}
+	switch relayInfo.RelayFormat {
+	case types.RelayFormatOpenAI, types.RelayFormatClaude, types.RelayFormatGemini, types.RelayFormatOpenAIResponses:
+	default:
+		return false
+	}
+	if usage.PromptTokensDetails.AudioTokens > 0 ||
+		usage.CompletionTokenDetails.ImageTokens > 0 ||
+		usage.CompletionTokenDetails.AudioTokens > 0 ||
+		usage.InputTokenDetails.AudioTokens > 0 ||
+		usage.OutputTokenDetails.ImageTokens > 0 ||
+		usage.OutputTokenDetails.AudioTokens > 0 {
+		return false
+	}
+	switch request := relayInfo.Request.(type) {
+	case *dto.GeneralOpenAIRequest:
+		var modalities []string
+		if len(request.Modalities) > 0 {
+			if err := common.Unmarshal(request.Modalities, &modalities); err != nil {
+				return false
+			}
+			for _, modality := range modalities {
+				if !strings.EqualFold(strings.TrimSpace(modality), "text") {
+					return false
+				}
+			}
+		}
+	case *dto.GeminiChatRequest:
+		for _, modality := range request.GenerationConfig.ResponseModalities {
+			if !strings.EqualFold(strings.TrimSpace(modality), "text") {
+				return false
+			}
+		}
+	case *dto.OpenAIResponsesRequest:
+		if responsesRequestUsesImageGeneration(request) {
+			return false
+		}
+	}
+	return !model_setting.IsGeminiModelSupportImagine(relayInfo.RequestedModelName) &&
+		!model_setting.IsGeminiModelSupportImagine(relayInfo.OriginModelName) &&
+		!model_setting.IsGeminiModelSupportImagine(relayInfo.UpstreamModelName)
+}
+
+func getEmptyResponseRefundMode(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage) string {
+	if relayInfo == nil {
+		return operation_setting.EmptyResponseRefundModeOff
+	}
+	requestedModelName := relayInfo.RequestedModelName
+	if requestedModelName == "" {
+		requestedModelName = relayInfo.OriginModelName
+	}
+	mode := operation_setting.GetEmptyResponseRefundMode(requestedModelName)
+	if mode == operation_setting.EmptyResponseRefundModeOff ||
+		relayInfo.RequestedZeroMaxOutput ||
+		usage == nil || usage.CompletionTokens != 0 || usage.OutputTokens != 0 ||
+		!isTextGenerationForEmptyResponseRefund(ctx, relayInfo, usage) {
+		return operation_setting.EmptyResponseRefundModeOff
+	}
+	return mode
+}
+
+func emptyResponseRefundRequestAllowsCustomText(relayInfo *relaycommon.RelayInfo) bool {
+	if relayInfo == nil {
+		return false
+	}
+	switch request := relayInfo.Request.(type) {
+	case *dto.GeneralOpenAIRequest:
+		if relayInfo.RelayMode == relayconstant.RelayModeCompletions {
+			return false
+		}
+		if request.ResponseFormat != nil && request.ResponseFormat.Type != "" && request.ResponseFormat.Type != "text" {
+			return false
+		}
+		return !isForcedToolChoice(request.ToolChoice) && !rawToolChoiceIsForced(request.FunctionCall)
+	case *dto.OpenAIResponsesRequest:
+		if responsesRequestUsesStructuredText(request.Text) {
+			return false
+		}
+		return !rawToolChoiceIsForced(request.ToolChoice)
+	case *dto.ClaudeRequest:
+		if len(request.OutputConfig) > 0 || len(request.OutputFormat) > 0 {
+			return false
+		}
+		return !isForcedToolChoice(request.ToolChoice)
+	case *dto.GeminiChatRequest:
+		if request.GenerationConfig.ResponseMimeType != "" &&
+			!strings.EqualFold(request.GenerationConfig.ResponseMimeType, "text/plain") {
+			return false
+		}
+		if request.GenerationConfig.ResponseSchema != nil || len(request.GenerationConfig.ResponseJsonSchema) > 0 {
+			return false
+		}
+		return request.ToolConfig == nil || request.ToolConfig.FunctionCallingConfig == nil ||
+			!strings.EqualFold(string(request.ToolConfig.FunctionCallingConfig.Mode), "ANY")
+	default:
+		return false
+	}
+}
+
+func isForcedToolChoice(toolChoice any) bool {
+	if toolChoice == nil {
+		return false
+	}
+	switch value := toolChoice.(type) {
+	case string:
+		value = strings.TrimSpace(value)
+		return value != "" && !strings.EqualFold(value, "auto") && !strings.EqualFold(value, "none")
+	default:
+		data, err := common.Marshal(value)
+		if err != nil {
+			return true
+		}
+		return rawToolChoiceIsForced(data)
+	}
+}
+
+func rawToolChoiceIsForced(value []byte) bool {
+	trimmed := strings.TrimSpace(string(value))
+	if trimmed == "" || trimmed == "null" {
+		return false
+	}
+	var stringValue string
+	if err := common.Unmarshal(value, &stringValue); err == nil {
+		return isForcedToolChoice(stringValue)
+	}
+	var objectValue map[string]interface{}
+	if err := common.Unmarshal(value, &objectValue); err != nil {
+		return true
+	}
+	choiceType := strings.TrimSpace(common.Interface2String(objectValue["type"]))
+	return choiceType == "" || (!strings.EqualFold(choiceType, "auto") && !strings.EqualFold(choiceType, "none"))
+}
+
+func responsesRequestUsesStructuredText(value []byte) bool {
+	if len(value) == 0 {
+		return false
+	}
+	var textConfig map[string]interface{}
+	if err := common.Unmarshal(value, &textConfig); err != nil {
+		return true
+	}
+	format, ok := textConfig["format"].(map[string]interface{})
+	if !ok || format == nil {
+		return false
+	}
+	formatType := strings.TrimSpace(common.Interface2String(format["type"]))
+	return formatType != "" && !strings.EqualFold(formatType, "text")
+}
+
+// GetEmptyResponseRefundCustomText returns response text without changing the
+// upstream usage. Callers must separately preserve completion/output tokens at 0.
+func GetEmptyResponseRefundCustomText(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, hasNonTextOutput bool) string {
+	if hasNonTextOutput || !emptyResponseRefundRequestAllowsCustomText(relayInfo) {
+		return ""
+	}
+	if getEmptyResponseRefundMode(ctx, relayInfo, usage) != operation_setting.EmptyResponseRefundModeRefund {
+		return ""
+	}
+	customText := operation_setting.GetEmptyResponseRefundCustomText()
+	if strings.TrimSpace(customText) == "" {
+		return ""
+	}
+	return customText
+}
+
 func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent []string) {
 	originUsage := usage
 	if usage == nil {
@@ -345,6 +533,13 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
 		}
 	}
+	emptyResponseRefundMode := getEmptyResponseRefundMode(ctx, relayInfo, originUsage)
+	plannedQuota := summary.Quota
+	if emptyResponseRefundMode == operation_setting.EmptyResponseRefundModeObserve {
+		extraContent = append(extraContent, "空响应自动退款观察模式命中，本次未退款")
+	} else if emptyResponseRefundMode == operation_setting.EmptyResponseRefundModeRefund {
+		summary.Quota = 0
+	}
 
 	if summary.WebSearchCallCount > 0 {
 		extraContent = append(extraContent, fmt.Sprintf("Web Search 调用 %d 次，调用花费 %s", summary.WebSearchCallCount, decimal.NewFromFloat(summary.WebSearchPrice).Mul(decimal.NewFromInt(int64(summary.WebSearchCallCount))).Div(decimal.NewFromInt(1000)).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
@@ -362,7 +557,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
 	}
 
-	if summary.TotalTokens == 0 {
+	if emptyResponseRefundMode == operation_setting.EmptyResponseRefundModeRefund {
+		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, 0)
+	} else if summary.TotalTokens == 0 {
 		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, summary.ModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
@@ -370,7 +567,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, summary.Quota)
 	}
 
+	settlementSucceeded := true
 	if err := SettleBilling(ctx, relayInfo, summary.Quota); err != nil {
+		settlementSucceeded = false
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
 
@@ -400,6 +599,11 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if adminRejectReason != "" {
 		other["reject_reason"] = adminRejectReason
+	}
+	if emptyResponseRefundMode != operation_setting.EmptyResponseRefundModeOff {
+		other["empty_response_detected"] = true
+		other["empty_response_refund_mode"] = emptyResponseRefundMode
+		other["empty_response_planned_quota"] = plannedQuota
 	}
 	if summary.ImageTokens != 0 {
 		other["image"] = true
@@ -473,6 +677,27 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
 	})
+	if emptyResponseRefundMode == operation_setting.EmptyResponseRefundModeRefund && settlementSucceeded {
+		model.RecordRefundLog(ctx, relayInfo.UserId, model.RecordRefundLogParams{
+			ChannelId:        relayInfo.ChannelId,
+			PromptTokens:     summary.PromptTokens,
+			CompletionTokens: summary.CompletionTokens,
+			ModelName:        logModel,
+			TokenName:        summary.TokenName,
+			Quota:            plannedQuota,
+			Content:          "空响应自动退款：模型未产生输出 Token，本次费用已全部退回。",
+			TokenId:          relayInfo.TokenId,
+			UseTimeSeconds:   int(summary.UseTimeSeconds),
+			IsStream:         relayInfo.IsStream,
+			Group:            relayInfo.UsingGroup,
+			Other: map[string]interface{}{
+				"reason":                       "空响应自动退款：模型未产生输出 Token，本次费用已全部退回。",
+				"empty_response_refund":        true,
+				"empty_response_planned_quota": plannedQuota,
+				"billing_source":               relayInfo.BillingSource,
+			},
+		})
+	}
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))
 	})

@@ -120,6 +120,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var toolCount int
 	var usage = &dto.Usage{}
 	var lastStreamData string
+	var pendingStopStreamData string
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
 
 	// 检查是否为音频模型
@@ -127,9 +128,13 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if lastStreamData != "" {
-			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
-				common.SysLog("error handling stream format: " + err.Error())
-				sr.Error(err)
+			if isStopStreamData(lastStreamData) {
+				pendingStopStreamData = lastStreamData
+			} else {
+				if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
+					common.SysLog("error handling stream format: " + err.Error())
+					sr.Error(err)
+				}
 			}
 		}
 		if len(data) > 0 {
@@ -171,22 +176,62 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		logger.LogError(c, fmt.Sprintf("error handling last response: %s, lastStreamData: [%s]", err.Error(), lastStreamData))
 	}
 
-	if info.RelayFormat == types.RelayFormatOpenAI {
-		if shouldSendLastResp {
-			_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
-		}
-	}
-
 	if !containStreamUsage {
 		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
 	}
-
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
 
-	HandleFinalResponse(c, info, lastStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, usage, toolCount > 0); customText != "" && responseTextBuilder.Len() == 0 {
+		customResponse := &dto.ChatCompletionsStreamResponse{
+			Id:      responseId,
+			Object:  "chat.completion.chunk",
+			Created: createAt,
+			Model:   model,
+			Choices: []dto.ChatCompletionsStreamResponseChoice{{
+				Index: 0,
+				Delta: dto.ChatCompletionsStreamResponseChoiceDelta{Content: &customText},
+			}},
+		}
+		if err := HandleStreamFormat(c, info, mustMarshalStreamResponse(customResponse), info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
+			logger.LogError(c, "failed to send empty response custom text: "+err.Error())
+		}
+	}
+	if pendingStopStreamData != "" && info.RelayFormat != types.RelayFormatGemini {
+		if err := HandleStreamFormat(c, info, pendingStopStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
+			logger.LogError(c, "failed to send deferred stop response: "+err.Error())
+		}
+	}
+	lastResponseIsDeferredStop := info.RelayFormat == types.RelayFormatOpenAI && pendingStopStreamData != "" && pendingStopStreamData == lastStreamData
+	if info.RelayFormat == types.RelayFormatOpenAI && shouldSendLastResp && !lastResponseIsDeferredStop {
+		_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
+	}
+
+	finalStreamData := lastStreamData
+	if info.RelayFormat == types.RelayFormatGemini && pendingStopStreamData != "" {
+		finalStreamData = pendingStopStreamData
+	}
+	HandleFinalResponse(c, info, finalStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
 
 	return usage, nil
+}
+
+func isStopStreamData(data string) bool {
+	var response dto.ChatCompletionsStreamResponse
+	if err := common.UnmarshalJsonStr(data, &response); err != nil {
+		return false
+	}
+	for _, choice := range response.Choices {
+		if choice.FinishReason != nil && *choice.FinishReason != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func mustMarshalStreamResponse(response *dto.ChatCompletionsStreamResponse) string {
+	data, _ := common.Marshal(response)
+	return string(data)
 }
 
 func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
@@ -253,10 +298,24 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	}
 
 	applyUsagePostProcessing(info, &simpleResponse.Usage, responseBody)
+	customResponseApplied := false
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, &simpleResponse.Usage, hasNonTextOpenAIResponse(&simpleResponse)); customText != "" && openAIResponseText(&simpleResponse) == "" {
+		for i := range simpleResponse.Choices {
+			simpleResponse.Choices[i].Message.SetStringContent(customText)
+		}
+		if len(simpleResponse.Choices) == 0 {
+			simpleResponse.Choices = []dto.OpenAITextResponseChoice{{
+				Index:        0,
+				Message:      dto.Message{Role: "assistant", Content: customText},
+				FinishReason: "stop",
+			}}
+		}
+		customResponseApplied = true
+	}
 
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
-		if usageModified {
+		if usageModified && !customResponseApplied {
 			var bodyMap map[string]interface{}
 			err = common.Unmarshal(responseBody, &bodyMap)
 			if err != nil {
@@ -265,7 +324,7 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 			bodyMap["usage"] = simpleResponse.Usage
 			responseBody, _ = common.Marshal(bodyMap)
 		}
-		if forceFormat {
+		if forceFormat || customResponseApplied {
 			responseBody, err = common.Marshal(simpleResponse)
 			if err != nil {
 				return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
@@ -292,6 +351,29 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &simpleResponse.Usage, nil
+}
+
+func openAIResponseText(response *dto.OpenAITextResponse) string {
+	var text strings.Builder
+	for _, choice := range response.Choices {
+		text.WriteString(choice.Message.StringContent())
+		text.WriteString(choice.Message.GetReasoningContent())
+	}
+	return text.String()
+}
+
+func hasNonTextOpenAIResponse(response *dto.OpenAITextResponse) bool {
+	for _, choice := range response.Choices {
+		if len(choice.Message.ParseToolCalls()) > 0 {
+			return true
+		}
+		for _, content := range choice.Message.ParseContent() {
+			if content.Type != dto.ContentTypeText {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func streamTTSResponse(c *gin.Context, resp *http.Response) {

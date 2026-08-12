@@ -337,6 +337,58 @@ type RecordTaskBillingLogParams struct {
 	Other     map[string]interface{}
 }
 
+type RecordRefundLogParams struct {
+	ChannelId        int
+	PromptTokens     int
+	CompletionTokens int
+	ModelName        string
+	TokenName        string
+	Quota            int
+	Content          string
+	TokenId          int
+	UseTimeSeconds   int
+	IsStream         bool
+	Group            string
+	Other            map[string]interface{}
+}
+
+func RecordRefundLog(c *gin.Context, userId int, params RecordRefundLogParams) {
+	username := c.GetString("username")
+	if username == "" {
+		username, _ = GetUsernameById(userId, false)
+	}
+	needRecordIp := false
+	if settingMap, err := GetUserSetting(userId, false); err == nil {
+		needRecordIp = settingMap.RecordIpLog
+	}
+	log := &Log{
+		UserId:            userId,
+		Username:          username,
+		CreatedAt:         common.GetTimestamp(),
+		Type:              LogTypeRefund,
+		Content:           params.Content,
+		PromptTokens:      params.PromptTokens,
+		CompletionTokens:  params.CompletionTokens,
+		TokenName:         params.TokenName,
+		ModelName:         params.ModelName,
+		Quota:             params.Quota,
+		ChannelId:         params.ChannelId,
+		TokenId:           params.TokenId,
+		UseTime:           params.UseTimeSeconds,
+		IsStream:          params.IsStream,
+		Group:             params.Group,
+		RequestId:         c.GetString(common.RequestIdKey),
+		UpstreamRequestId: c.GetString(common.UpstreamRequestIdKey),
+		Other:             common.MapToJsonStr(params.Other),
+	}
+	if needRecordIp {
+		log.Ip = c.ClientIP()
+	}
+	if err := LOG_DB.Create(log).Error; err != nil {
+		logger.LogError(c, "failed to record refund log: "+err.Error())
+	}
+}
+
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	if params.LogType == LogTypeConsume && !common.LogConsumeEnabled {
 		return

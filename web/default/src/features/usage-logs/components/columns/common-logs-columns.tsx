@@ -102,7 +102,13 @@ function buildDetailSegments(
   t: (key: string, opts?: Record<string, unknown>) => string
 ): DetailSegment[] {
   if (log.type === 6) {
-    return [{ text: t('Async task refund') }]
+    return [
+      {
+        text: other?.empty_response_refund
+          ? other.reason || log.content || t('Empty response automatic refund')
+          : t('Async task refund'),
+      },
+    ]
   }
 
   if (log.type !== 2) return []
@@ -720,7 +726,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
         const quota = row.getValue('quota') as number
         const other = parseLogOther(log.other)
-        const isSubscription = other?.billing_source === 'subscription'
+        const isSubscription =
+          other?.billing_source === 'subscription' &&
+          !other.empty_response_refund
 
         if (isSubscription) {
           return (
@@ -752,7 +760,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='border-border/80 bg-muted/60 inline-flex h-6 w-fit items-center rounded-md border px-2 text-sm leading-none [font-family:var(--font-body)] font-semibold tabular-nums'>
+            <span className='border-border/80 bg-muted/60 inline-flex h-6 w-fit items-center rounded-md border px-2 [font-family:var(--font-body)] text-sm leading-none font-semibold tabular-nums'>
               {quotaDisplay.prefix && (
                 <span className='mr-1'>{quotaDisplay.prefix}</span>
               )}

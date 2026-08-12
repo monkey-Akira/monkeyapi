@@ -103,6 +103,7 @@ type RelayInfo struct {
 	UsePrice               bool
 	RelayMode              int
 	OriginModelName        string
+	RequestedModelName     string // immutable model name from the client request
 	RequestURLPath         string
 	RequestHeaders         map[string]string
 	ShouldIncludeUsage     bool
@@ -121,7 +122,8 @@ type RelayInfo struct {
 	RelayFormat            types.RelayFormat
 	SendResponseCount      int
 	ReceivedResponseCount  int
-	FinalPreConsumedQuota  int // 最终预消耗的配额
+	RequestedZeroMaxOutput bool // client explicitly set a max-output field to 0
+	FinalPreConsumedQuota  int  // 最终预消耗的配额
 	// ForcePreConsume 为 true 时禁用 BillingSession 的信任额度旁路，
 	// 强制预扣全额。用于异步任务（视频/音乐生成等），因为请求返回后任务仍在运行，
 	// 必须在提交前锁定全额。
@@ -461,7 +463,8 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		reqId = common.GetTimeString() + common.GetRandomString(8)
 	}
 	info := &RelayInfo{
-		Request: request,
+		Request:                request,
+		RequestedZeroMaxOutput: requestedZeroMaxOutput(request),
 
 		RequestId:  reqId,
 		UserId:     common.GetContextKeyInt(c, constant.ContextKeyUserId),
@@ -470,7 +473,8 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		UserQuota:  common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
 		UserEmail:  common.GetContextKeyString(c, constant.ContextKeyUserEmail),
 
-		OriginModelName: common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
+		OriginModelName:    common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
+		RequestedModelName: common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
 
 		TokenId:        common.GetContextKeyInt(c, constant.ContextKeyTokenId),
 		TokenKey:       common.GetContextKeyString(c, constant.ContextKeyTokenKey),
@@ -511,6 +515,28 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 	}
 
 	return info
+}
+
+func requestedZeroMaxOutput(request dto.Request) bool {
+	switch req := request.(type) {
+	case *dto.GeneralOpenAIRequest:
+		if req.MaxCompletionTokens != nil {
+			return *req.MaxCompletionTokens == 0
+		}
+		return req.MaxTokens != nil && *req.MaxTokens == 0
+	case *dto.OpenAIResponsesRequest:
+		return req.MaxOutputTokens != nil && *req.MaxOutputTokens == 0
+	case *dto.ClaudeRequest:
+		if req.MaxTokens != nil {
+			return *req.MaxTokens == 0
+		}
+		return req.MaxTokensToSample != nil && *req.MaxTokensToSample == 0
+	case *dto.GeminiChatRequest:
+		return req.GenerationConfig.MaxOutputTokens != nil &&
+			*req.GenerationConfig.MaxOutputTokens == 0
+	default:
+		return false
+	}
 }
 
 func cloneRequestHeaders(c *gin.Context) map[string]string {

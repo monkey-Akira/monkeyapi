@@ -70,6 +70,18 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 		chatResp.Usage = *usage
 	}
+	if customText := service.GetEmptyResponseRefundCustomText(c, info, usage, len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason == "tool_calls"); customText != "" && service.ExtractOutputTextFromResponses(&responsesResp) == "" {
+		for i := range chatResp.Choices {
+			chatResp.Choices[i].Message.SetStringContent(customText)
+		}
+		if len(chatResp.Choices) == 0 {
+			chatResp.Choices = []dto.OpenAITextResponseChoice{{
+				Index:        0,
+				Message:      dto.Message{Role: "assistant", Content: customText},
+				FinishReason: "stop",
+			}}
+		}
+	}
 
 	var responseBody []byte
 	switch info.RelayFormat {
@@ -472,6 +484,25 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 					if streamResp.Response.Usage.CompletionTokenDetails.ReasoningTokens != 0 {
 						usage.CompletionTokenDetails.ReasoningTokens = streamResp.Response.Usage.CompletionTokenDetails.ReasoningTokens
 					}
+				}
+			}
+			if usage.TotalTokens == 0 {
+				usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+			}
+
+			if customText := service.GetEmptyResponseRefundCustomText(c, info, usage, sawToolCall); customText != "" && outputText.Len() == 0 {
+				if !sendStartIfNeeded() || !sendChatChunk(&dto.ChatCompletionsStreamResponse{
+					Id:      responseId,
+					Object:  "chat.completion.chunk",
+					Created: createAt,
+					Model:   model,
+					Choices: []dto.ChatCompletionsStreamResponseChoice{{
+						Index: 0,
+						Delta: dto.ChatCompletionsStreamResponseChoiceDelta{Content: &customText},
+					}},
+				}) {
+					sr.Stop(streamErr)
+					return
 				}
 			}
 

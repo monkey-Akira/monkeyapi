@@ -314,6 +314,54 @@ func UpdateOption(c *gin.Context) {
 				return
 			}
 		}
+	case "empty_response_refund_setting.mode":
+		mode := option.Value.(string)
+		if mode != operation_setting.EmptyResponseRefundModeOff &&
+			mode != operation_setting.EmptyResponseRefundModeObserve &&
+			mode != operation_setting.EmptyResponseRefundModeRefund {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "空响应自动退款模式只能是 off、observe 或 refund",
+			})
+			return
+		}
+	case "empty_response_refund_setting.models":
+		var models []string
+		err = common.UnmarshalJsonStr(option.Value.(string), &models)
+		if err != nil || models == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "空响应自动退款模型必须是 JSON 字符串数组",
+			})
+			return
+		}
+		normalizedModels := make([]string, 0, len(models))
+		seenModels := make(map[string]struct{}, len(models))
+		for _, modelName := range models {
+			modelName = strings.TrimSpace(modelName)
+			if modelName == "" {
+				continue
+			}
+			if _, exists := seenModels[modelName]; exists {
+				continue
+			}
+			seenModels[modelName] = struct{}{}
+			normalizedModels = append(normalizedModels, modelName)
+		}
+		normalizedJSON, marshalErr := common.Marshal(normalizedModels)
+		if marshalErr != nil {
+			common.ApiError(c, marshalErr)
+			return
+		}
+		option.Value = string(normalizedJSON)
+	case "empty_response_refund_setting.custom_response_text":
+		if len([]rune(option.Value.(string))) > 4000 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "空响应自定义返回词不能超过 4000 个字符",
+			})
+			return
+		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {
