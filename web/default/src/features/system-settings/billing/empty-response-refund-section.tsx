@@ -20,9 +20,10 @@ import { useMemo, useState } from 'react'
 import * as z from 'zod'
 import type { Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCheck, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -45,13 +46,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { MultiSelect } from '@/components/multi-select'
 import { getChannels, getEnabledModels } from '@/features/channels/api'
 import type { Channel } from '@/features/channels/types'
+import { updateEmptyResponseRefundSetting } from '../api'
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
 import { SettingsForm } from '../components/settings-form-layout'
 import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
-import { useUpdateOption } from '../hooks/use-update-option'
 
 const emptyResponseRefundSchema = z.object({
   mode: z.enum(['off', 'observe', 'refund']),
@@ -132,7 +133,19 @@ export function EmptyResponseRefundSection(
   props: EmptyResponseRefundSectionProps
 ) {
   const { t } = useTranslation()
-  const updateOption = useUpdateOption()
+  const queryClient = useQueryClient()
+  const updateSettings = useMutation({
+    mutationFn: async (values: EmptyResponseRefundFormValues) => {
+      const response = await updateEmptyResponseRefundSetting(values)
+      if (!response.success) {
+        throw new Error(response.message || t('Failed to update setting'))
+      }
+      return response
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || t('Failed to update setting'))
+    },
+  })
   const [channelFilter, setChannelFilter] = useState('all')
   const enabledModelsQuery = useQuery({
     queryKey: ['channels', 'enabled-models'],
@@ -182,13 +195,10 @@ export function EmptyResponseRefundSection(
         custom_response_enabled: props.defaultCustomResponseEnabled,
         custom_response_text: props.defaultCustomResponseText,
       },
-      onSubmit: async (_data, changedFields) => {
-        for (const [key, value] of Object.entries(changedFields)) {
-          await updateOption.mutateAsync({
-            key: `empty_response_refund_setting.${key}`,
-            value: key === 'models' ? JSON.stringify(value) : String(value),
-          })
-        }
+      onSubmit: async (data) => {
+        await updateSettings.mutateAsync(data)
+        await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        toast.success(t('Setting updated successfully'))
       },
     })
 
@@ -240,7 +250,7 @@ export function EmptyResponseRefundSection(
         <SettingsForm onSubmit={handleSubmit}>
           <SettingsPageFormActions
             onSave={handleSubmit}
-            isSaving={updateOption.isPending || isSubmitting}
+            isSaving={updateSettings.isPending || isSubmitting}
           />
           <FormDirtyIndicator isDirty={isDirty} />
 

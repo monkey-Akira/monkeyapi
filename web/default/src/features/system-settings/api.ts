@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 import type {
   ConfirmPaymentComplianceResponse,
   DeleteLogsResponse,
+  EmptyResponseRefundUpdateRequest,
   FetchUpstreamRatiosRequest,
   SystemOptionsResponse,
   UpdateOptionRequest,
@@ -35,6 +36,16 @@ export async function getSystemOptions() {
 
 export async function updateSystemOption(request: UpdateOptionRequest) {
   const res = await api.put<UpdateOptionResponse>('/api/option/', request)
+  return res.data
+}
+
+export async function updateEmptyResponseRefundSetting(
+  request: EmptyResponseRefundUpdateRequest
+) {
+  const res = await api.put<UpdateOptionResponse>(
+    '/api/option/empty_response_refund',
+    request
+  )
   return res.data
 }
 

@@ -39,6 +39,13 @@ export type UpdateOptionResponse = {
   message: string
 }
 
+export type EmptyResponseRefundUpdateRequest = {
+  mode: 'off' | 'observe' | 'refund'
+  models: string[]
+  custom_response_enabled: boolean
+  custom_response_text: string
+}
+
 export type ConfirmPaymentComplianceResponse = {
   success: boolean
   message: string
