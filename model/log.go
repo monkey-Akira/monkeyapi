@@ -70,16 +70,45 @@ func applyUserErrorMessage(log *Log, otherMap map[string]interface{}) {
 	if log == nil || log.Type != LogTypeError || otherMap == nil {
 		return
 	}
-	errorCode, ok := otherMap["error_code"].(string)
-	if !ok || errorCode == "" {
+	errorCode, _ := otherMap["error_code"].(string)
+	messageCode, _ := otherMap["error_message_code"].(string)
+	missingErrorCode := errorCode == "" || errorCode == "unknown_error" || errorCode == string(types.ErrorCodeBadResponseStatusCode)
+	if missingErrorCode && strings.Contains(strings.ToLower(log.Content), "no available accounts") {
+		messageCode = "no_available_accounts"
+	}
+	if strings.TrimSpace(messageCode) == "" {
+		messageCode = errorCode
+	}
+	if strings.TrimSpace(messageCode) == "" {
 		return
 	}
-	customMessage := common.GetCustomErrorMessage("upstream:" + errorCode)
+	candidates := []string{messageCode}
+	if errorCode != "" {
+		candidates = append(candidates, errorCode)
+	}
+	statusCode, _ := otherMap["status_code"].(float64)
+	if missingErrorCode && statusCode > 0 {
+		candidates = append(candidates, fmt.Sprintf("http_%d", int(statusCode)))
+	}
+	var customMessage string
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		customMessage = common.GetCustomErrorMessage("upstream:" + candidate)
+		if customMessage != "" {
+			break
+		}
+	}
+	if customMessage == "" {
+		customMessage = common.GetCustomErrorMessage(errorCode)
+	}
 	if customMessage == "" {
 		return
 	}
-	statusCode, ok := otherMap["status_code"].(float64)
-	if ok && statusCode > 0 {
+	if statusCode > 0 {
 		log.Content = fmt.Sprintf("status_code=%d, %s", int(statusCode), customMessage)
 		return
 	}
@@ -97,8 +126,11 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
 		}
-		logs[i].Other = common.MapToJsonStr(otherMap)
 		applyUserErrorMessage(logs[i], otherMap)
+		if otherMap != nil {
+			delete(otherMap, "error_message_code")
+		}
+		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = startIdx + i + 1
 	}
 }

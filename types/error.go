@@ -88,15 +88,16 @@ const (
 )
 
 type NewAPIError struct {
-	Err            error
-	RelayError     any
-	skipRetry      bool
-	recordErrorLog *bool
-	upstreamError  bool
-	errorType      ErrorType
-	errorCode      ErrorCode
-	StatusCode     int
-	Metadata       json.RawMessage
+	Err              error
+	RelayError       any
+	skipRetry        bool
+	recordErrorLog   *bool
+	upstreamError    bool
+	errorMessageCode string
+	errorType        ErrorType
+	errorCode        ErrorCode
+	StatusCode       int
+	Metadata         json.RawMessage
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -178,12 +179,61 @@ func (e *NewAPIError) SetMessage(message string) {
 	e.Err = errors.New(message)
 }
 
+// GetErrorMessageCode returns the internal key used to select a custom error message.
+// It does not change the error code returned to API clients.
+func (e *NewAPIError) GetErrorMessageCode() string {
+	if e == nil {
+		return ""
+	}
+	if code := strings.TrimSpace(e.errorMessageCode); code != "" {
+		return code
+	}
+	if e.upstreamError && e.StatusCode > 0 &&
+		(e.errorCode == ErrorCodeBadResponseStatusCode || e.errorCode == ErrorCode("unknown_error")) {
+		return fmt.Sprintf("http_%d", e.StatusCode)
+	}
+	return strings.TrimSpace(string(e.errorCode))
+}
+
+func (e *NewAPIError) SetErrorMessageCode(code string) {
+	if e == nil {
+		return
+	}
+	e.errorMessageCode = strings.TrimSpace(code)
+}
+
 func (e *NewAPIError) applyCustomErrorMessage(errorCode string, currentMessage string) string {
 	errorCode = strings.TrimSpace(errorCode)
-	if e != nil && e.upstreamError && errorCode != "" {
-		if customMessage := common.GetCustomErrorMessage("upstream:" + errorCode); customMessage != "" {
-			return customMessage
+	if e != nil && e.upstreamError {
+		candidates := make([]string, 0, 2)
+		if messageCode := e.GetErrorMessageCode(); messageCode != "" {
+			candidates = append(candidates, messageCode)
 		}
+		if errorCode != "" {
+			candidates = append(candidates, errorCode)
+		}
+		seen := make(map[string]struct{}, len(candidates))
+		for _, candidate := range candidates {
+			if _, ok := seen[candidate]; ok {
+				continue
+			}
+			seen[candidate] = struct{}{}
+			if customMessage := common.GetCustomErrorMessage("upstream:" + candidate); customMessage != "" {
+				return customMessage
+			}
+		}
+		if errorCode != "" && errorCode != "unknown_error" && errorCode != string(ErrorCodeBadResponseStatusCode) {
+			return common.ApplyCustomErrorMessage(errorCode, currentMessage)
+		}
+		if e.StatusCode > 0 {
+			statusMessageCode := fmt.Sprintf("http_%d", e.StatusCode)
+			if _, ok := seen[statusMessageCode]; !ok {
+				if customMessage := common.GetCustomErrorMessage("upstream:" + statusMessageCode); customMessage != "" {
+					return customMessage
+				}
+			}
+		}
+		return common.ApplyCustomErrorMessage(errorCode, currentMessage)
 	}
 	return common.ApplyCustomErrorMessage(errorCode, currentMessage)
 }

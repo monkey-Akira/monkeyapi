@@ -377,6 +377,9 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		other["error_type"] = err.GetErrorType()
 		other["error_code"] = err.GetErrorCode()
+		if errorMessageCode := err.GetErrorMessageCode(); errorMessageCode != "" && errorMessageCode != string(err.GetErrorCode()) {
+			other["error_message_code"] = errorMessageCode
+		}
 		other["status_code"] = err.StatusCode
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")
