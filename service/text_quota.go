@@ -351,9 +351,7 @@ func isTextGenerationForEmptyResponseRefund(ctx *gin.Context, relayInfo *relayco
 	if usage.PromptTokensDetails.AudioTokens > 0 ||
 		usage.CompletionTokenDetails.ImageTokens > 0 ||
 		usage.CompletionTokenDetails.AudioTokens > 0 ||
-		usage.InputTokenDetails.AudioTokens > 0 ||
-		usage.OutputTokenDetails.ImageTokens > 0 ||
-		usage.OutputTokenDetails.AudioTokens > 0 {
+		(usage.InputTokensDetails != nil && usage.InputTokensDetails.AudioTokens > 0) {
 		return false
 	}
 	switch request := relayInfo.Request.(type) {
