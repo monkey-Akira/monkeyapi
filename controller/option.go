@@ -277,6 +277,16 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "ModelRequestRateLimitModels":
+		normalized, normalizeErr := setting.NormalizeModelRequestRateLimitModels(option.Value.(string))
+		if normalizeErr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": normalizeErr.Error(),
+			})
+			return
+		}
+		option.Value = normalized
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {

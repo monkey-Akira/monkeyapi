@@ -4518,6 +4518,16 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Enable per-model limits": "Включить лимиты по моделям",
+    "Limits are counted separately for each user and original model name.": "Лимиты считаются отдельно для каждого пользователя и исходного имени модели.",
+    "Search enabled models": "Поиск включенных моделей",
+    "Add limit": "Добавить лимит",
+    "No model limits configured": "Лимиты моделей не настроены",
+    "{{model}} requests per minute": "Запросов в минуту для {{model}}",
+    "Per-model rate limits": "Лимиты по моделям",
+    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "Все попытки учитываются в 60-секундном окне. При превышении лимита возвращается HTTP 429 до выбора вышестоящего канала.",
+    "Invalid per-model rate limit configuration": "Недопустимая конфигурация лимитов по моделям",
+    "Remove {{model}}": "Удалить {{model}}"
   }
 }

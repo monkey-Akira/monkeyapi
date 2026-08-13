@@ -4584,6 +4584,15 @@
     "No empty-response detection or refunds are performed.": "不检测空响应，也不执行退款。",
     "Matching requests are marked in usage logs, but charges are unchanged.": "命中的请求会在使用日志中标记，但费用保持不变。",
     "Matching requests are settled at zero and receive a separate refund log.": "命中的请求会按零费用结算，并生成一条独立退款日志。",
-    "Empty response automatic refund": "空响应自动退款"
+    "Empty response automatic refund": "空响应自动退款",
+    "Enable per-model limits": "启用指定模型限制",
+    "Limits are counted separately for each user and original model name.": "按用户和客户端请求的原始模型名分别计数。",
+    "Search enabled models": "搜索已启用模型",
+    "Add limit": "添加限制",
+    "No model limits configured": "尚未配置模型限制",
+    "{{model}} requests per minute": "{{model}} 每分钟请求数",
+    "Per-model rate limits": "指定模型每分钟限制",
+    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "成功和失败请求都会计入 60 秒窗口；超限请求会在选择上游渠道前返回 HTTP 429。",
+    "Invalid per-model rate limit configuration": "指定模型限流配置无效"
   }
 }

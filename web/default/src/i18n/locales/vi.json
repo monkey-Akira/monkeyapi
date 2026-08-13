@@ -4518,6 +4518,16 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Enable per-model limits": "Bật giới hạn theo mô hình",
+    "Limits are counted separately for each user and original model name.": "Giới hạn được tính riêng cho từng người dùng và tên mô hình gốc.",
+    "Search enabled models": "Tìm mô hình đã bật",
+    "Add limit": "Thêm giới hạn",
+    "No model limits configured": "Chưa cấu hình giới hạn mô hình",
+    "{{model}} requests per minute": "Số yêu cầu mỗi phút cho {{model}}",
+    "Per-model rate limits": "Giới hạn theo mô hình",
+    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "Mọi lần thử đều được tính trong cửa sổ 60 giây. Yêu cầu vượt giới hạn trả về HTTP 429 trước khi chọn kênh thượng nguồn.",
+    "Invalid per-model rate limit configuration": "Cấu hình giới hạn theo mô hình không hợp lệ",
+    "Remove {{model}}": "Xóa {{model}}"
   }
 }

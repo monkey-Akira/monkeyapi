@@ -25,8 +25,9 @@ import (
 )
 
 type ModelRequest struct {
-	Model string `json:"model"`
-	Group string `json:"group,omitempty"`
+	Model          string `json:"model"`
+	Group          string `json:"group,omitempty"`
+	RequestedModel string `json:"-"`
 }
 
 func Distribute() func(c *gin.Context) {
@@ -36,6 +37,13 @@ func Distribute() func(c *gin.Context) {
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+			return
+		}
+		requestedModel := modelRequest.Model
+		if modelRequest.RequestedModel != "" {
+			requestedModel = modelRequest.RequestedModel
+		}
+		if !checkModelRequestRateLimit(c, requestedModel) {
 			return
 		}
 		if ok {
@@ -391,6 +399,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	}
 
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
+		modelRequest.RequestedModel = modelRequest.Model
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
 	return &modelRequest, shouldSelectChannel, nil

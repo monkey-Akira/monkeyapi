@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common/limiter"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -19,7 +20,84 @@ import (
 const (
 	ModelRequestRateLimitCountMark        = "MRRL"
 	ModelRequestRateLimitSuccessCountMark = "MRRLS"
+	modelRequestRateLimitModelMark        = "MRRLM"
+	modelRequestRateLimitWindowSeconds    = int64(60)
 )
+
+var modelRequestRateLimitMemoryLimiter common.InMemoryRateLimiter
+
+var modelRequestRateLimitRedisScript = redis.NewScript(`
+local now = redis.call('TIME')
+local now_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+local window_ms = tonumber(ARGV[1])
+local max_count = tonumber(ARGV[2])
+
+redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, now_ms - window_ms)
+if redis.call('ZCARD', KEYS[1]) >= max_count then
+  redis.call('PEXPIRE', KEYS[1], window_ms)
+  return 0
+end
+
+local current_count = redis.call('ZCARD', KEYS[1])
+local member = tostring(now[1]) .. ':' .. tostring(now[2]) .. ':' .. tostring(current_count)
+redis.call('ZADD', KEYS[1], now_ms, member)
+redis.call('PEXPIRE', KEYS[1], window_ms)
+return 1
+`)
+
+func modelRequestRateLimitKey(userId int, modelName string) string {
+	return fmt.Sprintf("rateLimit:%s:%d:%s", modelRequestRateLimitModelMark, userId, common.Sha1([]byte(modelName)))
+}
+
+func allowModelRequestWithRedis(c *gin.Context, key string, maxCount int) (bool, error) {
+	windowMilliseconds := modelRequestRateLimitWindowSeconds * int64(time.Second/time.Millisecond)
+	result, err := modelRequestRateLimitRedisScript.Run(
+		c.Request.Context(),
+		common.RDB,
+		[]string{key},
+		windowMilliseconds,
+		maxCount,
+	).Int()
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
+}
+
+func checkModelRequestRateLimit(c *gin.Context, modelName string) bool {
+	maxCount, found := setting.GetModelRequestRateLimitRPM(modelName)
+	if !found {
+		return true
+	}
+
+	userId := c.GetInt("id")
+	key := modelRequestRateLimitKey(userId, modelName)
+	allowed := false
+	if common.RedisEnabled {
+		var err error
+		allowed, err = allowModelRequestWithRedis(c, key, maxCount)
+		if err != nil {
+			common.SysError("failed to check per-model request rate limit: " + err.Error())
+			abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
+			return false
+		}
+	} else {
+		modelRequestRateLimitMemoryLimiter.Init(time.Minute)
+		allowed = modelRequestRateLimitMemoryLimiter.Request(key, maxCount, modelRequestRateLimitWindowSeconds)
+	}
+
+	if allowed {
+		return true
+	}
+	c.Header("Retry-After", strconv.FormatInt(modelRequestRateLimitWindowSeconds, 10))
+	abortWithOpenAiMessage(
+		c,
+		http.StatusTooManyRequests,
+		fmt.Sprintf("模型 %s 每分钟最多请求 %d 次，当前已达到限制", modelName, maxCount),
+		types.ErrorCodeRateLimitReached,
+	)
+	return false
+}
 
 // 检查Redis中的请求限制
 func checkRedisRateLimit(ctx context.Context, rdb *redis.Client, key string, maxCount int, duration int64) (bool, error) {

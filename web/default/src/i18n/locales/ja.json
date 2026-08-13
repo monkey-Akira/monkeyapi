@@ -4518,6 +4518,16 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Enable per-model limits": "モデル別制限を有効にする",
+    "Limits are counted separately for each user and original model name.": "ユーザーと元のモデル名ごとに個別にカウントされます。",
+    "Search enabled models": "有効なモデルを検索",
+    "Add limit": "制限を追加",
+    "No model limits configured": "モデル制限は設定されていません",
+    "{{model}} requests per minute": "{{model}} の1分あたりのリクエスト数",
+    "Per-model rate limits": "モデル別レート制限",
+    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "すべての試行が60秒のウィンドウにカウントされます。制限超過時は上流チャネルの選択前に HTTP 429 を返します。",
+    "Invalid per-model rate limit configuration": "モデル別レート制限の設定が無効です",
+    "Remove {{model}}": "{{model}} を削除"
   }
 }
