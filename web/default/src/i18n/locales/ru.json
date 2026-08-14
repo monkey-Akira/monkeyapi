@@ -4519,15 +4519,14 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
-    "Enable per-model limits": "Включить лимиты по моделям",
-    "Limits are counted separately for each user and original model name.": "Лимиты считаются отдельно для каждого пользователя и исходного имени модели.",
+    "Limit only selected models": "Ограничивать только выбранные модели",
+    "When disabled, the existing limits apply to all models.": "Если параметр отключен, существующие лимиты применяются ко всем моделям.",
+    "Models using the shared rate limit": "Модели с общим лимитом",
     "Search enabled models": "Поиск включенных моделей",
-    "Add limit": "Добавить лимит",
-    "No model limits configured": "Лимиты моделей не настроены",
-    "{{model}} requests per minute": "Запросов в минуту для {{model}}",
-    "Per-model rate limits": "Лимиты по моделям",
-    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "Все попытки учитываются в 60-секундном окне. При превышении лимита возвращается HTTP 429 до выбора вышестоящего канала.",
-    "Invalid per-model rate limit configuration": "Недопустимая конфигурация лимитов по моделям",
+    "Select at least one model when limiting selected models.": "Выберите хотя бы одну модель для ограничения выбранных моделей.",
+    "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Выбранные модели используют общие период, общий лимит запросов, лимит успешных запросов и правила групп, заданные выше.",
+    "Invalid model rate limit scope configuration": "Недопустимая конфигурация области ограничения моделей",
+    "Model scope": "Область моделей",
     "Remove {{model}}": "Удалить {{model}}"
   }
 }

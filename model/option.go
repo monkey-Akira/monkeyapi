@@ -522,7 +522,15 @@ func updateOptionMap(key string, value string) (err error) {
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
 	case "ModelRequestRateLimitModels":
-		err = setting.UpdateModelRequestRateLimitModelsByJSONString(value)
+		normalized, normalizeErr := setting.NormalizeModelRequestRateLimitModels(value)
+		if normalizeErr != nil {
+			err = normalizeErr
+			break
+		}
+		err = setting.UpdateModelRequestRateLimitModelsByJSONString(normalized)
+		if err == nil {
+			common.OptionMap[key] = normalized
+		}
 	case "RetryTimes":
 		common.RetryTimes, _ = strconv.Atoi(value)
 	case "DataExportInterval":

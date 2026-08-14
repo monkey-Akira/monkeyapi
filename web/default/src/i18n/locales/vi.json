@@ -4519,15 +4519,14 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
-    "Enable per-model limits": "Bật giới hạn theo mô hình",
-    "Limits are counted separately for each user and original model name.": "Giới hạn được tính riêng cho từng người dùng và tên mô hình gốc.",
+    "Limit only selected models": "Chỉ giới hạn các mô hình đã chọn",
+    "When disabled, the existing limits apply to all models.": "Khi tắt, giới hạn hiện có áp dụng cho tất cả mô hình.",
+    "Models using the shared rate limit": "Các mô hình dùng chung giới hạn",
     "Search enabled models": "Tìm mô hình đã bật",
-    "Add limit": "Thêm giới hạn",
-    "No model limits configured": "Chưa cấu hình giới hạn mô hình",
-    "{{model}} requests per minute": "Số yêu cầu mỗi phút cho {{model}}",
-    "Per-model rate limits": "Giới hạn theo mô hình",
-    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "Mọi lần thử đều được tính trong cửa sổ 60 giây. Yêu cầu vượt giới hạn trả về HTTP 429 trước khi chọn kênh thượng nguồn.",
-    "Invalid per-model rate limit configuration": "Cấu hình giới hạn theo mô hình không hợp lệ",
+    "Select at least one model when limiting selected models.": "Hãy chọn ít nhất một mô hình khi giới hạn các mô hình đã chọn.",
+    "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Các mô hình đã chọn dùng chung khoảng thời gian, tổng số yêu cầu, số yêu cầu thành công và quy tắc nhóm được cấu hình ở trên.",
+    "Invalid model rate limit scope configuration": "Cấu hình phạm vi giới hạn mô hình không hợp lệ",
+    "Model scope": "Phạm vi mô hình",
     "Remove {{model}}": "Xóa {{model}}"
   }
 }

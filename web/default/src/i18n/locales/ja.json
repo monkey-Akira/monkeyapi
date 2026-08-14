@@ -4519,15 +4519,14 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
     "Zoom": "ズーム",
-    "Enable per-model limits": "モデル別制限を有効にする",
-    "Limits are counted separately for each user and original model name.": "ユーザーと元のモデル名ごとに個別にカウントされます。",
+    "Limit only selected models": "選択したモデルのみを制限する",
+    "When disabled, the existing limits apply to all models.": "無効の場合、既存の制限はすべてのモデルに適用されます。",
+    "Models using the shared rate limit": "共有レート制限を使用するモデル",
     "Search enabled models": "有効なモデルを検索",
-    "Add limit": "制限を追加",
-    "No model limits configured": "モデル制限は設定されていません",
-    "{{model}} requests per minute": "{{model}} の1分あたりのリクエスト数",
-    "Per-model rate limits": "モデル別レート制限",
-    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "すべての試行が60秒のウィンドウにカウントされます。制限超過時は上流チャネルの選択前に HTTP 429 を返します。",
-    "Invalid per-model rate limit configuration": "モデル別レート制限の設定が無効です",
+    "Select at least one model when limiting selected models.": "選択モデルを制限する場合は、少なくとも1つのモデルを選択してください。",
+    "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "選択したモデルは、上記の期間、総リクエスト数、成功リクエスト数、グループ上書き設定を共有します。",
+    "Invalid model rate limit scope configuration": "モデル制限範囲の設定が無効です",
+    "Model scope": "モデルの範囲",
     "Remove {{model}}": "{{model}} を削除"
   }
 }

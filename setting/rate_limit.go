@@ -3,6 +3,7 @@ package setting
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 
@@ -16,16 +17,19 @@ var ModelRequestRateLimitSuccessCount = 1000
 var ModelRequestRateLimitGroup = map[string][2]int{}
 var ModelRequestRateLimitMutex sync.RWMutex
 
-const MaxModelRequestRateLimitRPM = 100000000
+const (
+	ModelRequestRateLimitScopeAll      = "all"
+	ModelRequestRateLimitScopeSelected = "selected"
+)
 
 type ModelRequestRateLimitModelsConfig struct {
-	Enabled bool           `json:"enabled"`
-	Limits  map[string]int `json:"limits"`
+	Mode   string   `json:"mode"`
+	Models []string `json:"models"`
 }
 
 var modelRequestRateLimitModels = ModelRequestRateLimitModelsConfig{
-	Enabled: false,
-	Limits:  map[string]int{},
+	Mode:   ModelRequestRateLimitScopeAll,
+	Models: []string{},
 }
 var modelRequestRateLimitModelsMutex sync.RWMutex
 
@@ -82,34 +86,61 @@ func CheckModelRequestRateLimitGroup(jsonStr string) error {
 }
 
 func NormalizeModelRequestRateLimitModels(jsonStr string) (string, error) {
+	isPreviousFormat := false
 	var payload struct {
+		Mode    string         `json:"mode"`
+		Models  []string       `json:"models"`
 		Enabled *bool          `json:"enabled"`
 		Limits  map[string]int `json:"limits"`
 	}
 	if err := common.UnmarshalJsonStr(jsonStr, &payload); err != nil {
-		return "", fmt.Errorf("指定模型限流配置必须是有效的 JSON 对象: %w", err)
-	}
-	if payload.Enabled == nil || payload.Limits == nil {
-		return "", fmt.Errorf("指定模型限流配置必须包含 enabled 和 limits")
+		return "", fmt.Errorf("模型限流范围配置必须是有效的 JSON 对象: %w", err)
 	}
 
-	normalizedLimits := make(map[string]int, len(payload.Limits))
-	for rawModelName, rpm := range payload.Limits {
+	// Compatible with the previous per-model RPM format. The old RPM values are
+	// intentionally discarded because selected models now share the global limits.
+	if payload.Mode == "" && payload.Enabled != nil && payload.Limits != nil {
+		isPreviousFormat = true
+		if *payload.Enabled {
+			payload.Mode = ModelRequestRateLimitScopeSelected
+			payload.Models = make([]string, 0, len(payload.Limits))
+			for modelName := range payload.Limits {
+				payload.Models = append(payload.Models, modelName)
+			}
+		} else {
+			payload.Mode = ModelRequestRateLimitScopeAll
+			payload.Models = []string{}
+		}
+	}
+
+	if payload.Mode != ModelRequestRateLimitScopeAll && payload.Mode != ModelRequestRateLimitScopeSelected {
+		return "", fmt.Errorf("模型限流范围必须是 all 或 selected")
+	}
+
+	normalizedModels := make([]string, 0, len(payload.Models))
+	seenModels := make(map[string]struct{}, len(payload.Models))
+	for _, rawModelName := range payload.Models {
 		modelName := strings.TrimSpace(rawModelName)
 		if modelName == "" {
-			return "", fmt.Errorf("指定模型限流的模型名不能为空")
+			return "", fmt.Errorf("模型限流范围中的模型名不能为空")
 		}
-		if _, exists := normalizedLimits[modelName]; exists {
-			return "", fmt.Errorf("指定模型限流包含重复模型: %s", modelName)
+		if _, exists := seenModels[modelName]; exists {
+			return "", fmt.Errorf("模型限流范围包含重复模型: %s", modelName)
 		}
-		if rpm < 1 || rpm > MaxModelRequestRateLimitRPM {
-			return "", fmt.Errorf("模型 %s 的每分钟调用次数必须在 1 到 %d 之间", modelName, MaxModelRequestRateLimitRPM)
-		}
-		normalizedLimits[modelName] = rpm
+		seenModels[modelName] = struct{}{}
+		normalizedModels = append(normalizedModels, modelName)
 	}
+	if payload.Mode == ModelRequestRateLimitScopeSelected && len(normalizedModels) == 0 && !isPreviousFormat {
+		return "", fmt.Errorf("选择指定模型限流时至少需要选择一个模型")
+	}
+	if payload.Mode == ModelRequestRateLimitScopeAll {
+		normalizedModels = []string{}
+	}
+	sort.Strings(normalizedModels)
+
 	config := ModelRequestRateLimitModelsConfig{
-		Enabled: *payload.Enabled,
-		Limits:  normalizedLimits,
+		Mode:   payload.Mode,
+		Models: normalizedModels,
 	}
 
 	jsonBytes, err := common.Marshal(config)
@@ -125,8 +156,8 @@ func ModelRequestRateLimitModels2JSONString() string {
 
 	jsonBytes, err := common.Marshal(modelRequestRateLimitModels)
 	if err != nil {
-		common.SysLog("error marshalling model request rate limits: " + err.Error())
-		return `{"enabled":false,"limits":{}}`
+		common.SysLog("error marshalling model request rate limit scope: " + err.Error())
+		return `{"mode":"all","models":[]}`
 	}
 	return string(jsonBytes)
 }
@@ -148,13 +179,24 @@ func UpdateModelRequestRateLimitModelsByJSONString(jsonStr string) error {
 	return nil
 }
 
-func GetModelRequestRateLimitRPM(modelName string) (int, bool) {
+func ModelRequestRateLimitAppliesToAllModels() bool {
 	modelRequestRateLimitModelsMutex.RLock()
 	defer modelRequestRateLimitModelsMutex.RUnlock()
 
-	if !modelRequestRateLimitModels.Enabled {
-		return 0, false
+	return modelRequestRateLimitModels.Mode != ModelRequestRateLimitScopeSelected
+}
+
+func ShouldApplyModelRequestRateLimit(modelName string) bool {
+	modelRequestRateLimitModelsMutex.RLock()
+	defer modelRequestRateLimitModelsMutex.RUnlock()
+
+	if modelRequestRateLimitModels.Mode != ModelRequestRateLimitScopeSelected {
+		return true
 	}
-	rpm, found := modelRequestRateLimitModels.Limits[modelName]
-	return rpm, found && rpm > 0
+	for _, selectedModel := range modelRequestRateLimitModels.Models {
+		if selectedModel == modelName {
+			return true
+		}
+	}
+	return false
 }

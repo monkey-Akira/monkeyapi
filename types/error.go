@@ -66,8 +66,7 @@ const (
 	ErrorCodeAccessDenied          ErrorCode = "access_denied"
 
 	// request error
-	ErrorCodeBadRequestBody   ErrorCode = "bad_request_body"
-	ErrorCodeRateLimitReached ErrorCode = "rate_limit_reached"
+	ErrorCodeBadRequestBody ErrorCode = "bad_request_body"
 
 	// response error
 	ErrorCodeReadResponseBodyFailed ErrorCode = "read_response_body_failed"

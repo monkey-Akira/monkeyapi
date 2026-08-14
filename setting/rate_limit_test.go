@@ -8,43 +8,69 @@ import (
 
 func TestNormalizeModelRequestRateLimitModels(t *testing.T) {
 	normalized, err := NormalizeModelRequestRateLimitModels(`{
-		"enabled": true,
-		"limits": {" free-model ": 10, "other-model": 2}
+		"mode": "selected",
+		"models": [" other-model ", "free-model"]
 	}`)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
-		"enabled": true,
-		"limits": {"free-model": 10, "other-model": 2}
+		"mode": "selected",
+		"models": ["free-model", "other-model"]
 	}`, normalized)
 }
 
-func TestNormalizeModelRequestRateLimitModelsRejectsInvalidRPM(t *testing.T) {
-	_, err := NormalizeModelRequestRateLimitModels(`{"enabled":true,"limits":{"free-model":0}}`)
-	require.EqualError(t, err, "模型 free-model 的每分钟调用次数必须在 1 到 100000000 之间")
+func TestNormalizeModelRequestRateLimitModelsMigratesPreviousFormat(t *testing.T) {
+	normalized, err := NormalizeModelRequestRateLimitModels(`{
+		"enabled": true,
+		"limits": {"free-model": 10, "other-model": 2}
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"mode": "selected",
+		"models": ["free-model", "other-model"]
+	}`, normalized)
 }
 
-func TestNormalizeModelRequestRateLimitModelsRequiresCompleteObject(t *testing.T) {
+func TestNormalizeModelRequestRateLimitModelsPreservesEmptyPreviousSelection(t *testing.T) {
+	normalized, err := NormalizeModelRequestRateLimitModels(`{
+		"enabled": true,
+		"limits": {}
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"mode": "selected",
+		"models": []
+	}`, normalized)
+}
+
+func TestNormalizeModelRequestRateLimitModelsRejectsEmptySelection(t *testing.T) {
+	_, err := NormalizeModelRequestRateLimitModels(`{"mode":"selected","models":[]}`)
+	require.EqualError(t, err, "选择指定模型限流时至少需要选择一个模型")
+}
+
+func TestNormalizeModelRequestRateLimitModelsRequiresValidMode(t *testing.T) {
 	_, err := NormalizeModelRequestRateLimitModels(`null`)
-	require.EqualError(t, err, "指定模型限流配置必须包含 enabled 和 limits")
+	require.EqualError(t, err, "模型限流范围必须是 all 或 selected")
 
-	_, err = NormalizeModelRequestRateLimitModels(`{"enabled":true}`)
-	require.EqualError(t, err, "指定模型限流配置必须包含 enabled 和 limits")
+	_, err = NormalizeModelRequestRateLimitModels(`{"mode":"custom","models":[]}`)
+	require.EqualError(t, err, "模型限流范围必须是 all 或 selected")
 }
 
-func TestGetModelRequestRateLimitRPMMatchesExactModelName(t *testing.T) {
+func TestShouldApplyModelRequestRateLimitMatchesExactModelName(t *testing.T) {
 	previous := ModelRequestRateLimitModels2JSONString()
 	t.Cleanup(func() {
 		require.NoError(t, UpdateModelRequestRateLimitModelsByJSONString(previous))
 	})
 
 	require.NoError(t, UpdateModelRequestRateLimitModelsByJSONString(
-		`{"enabled":true,"limits":{"free-model":3}}`,
+		`{"mode":"selected","models":["free-model"]}`,
 	))
 
-	rpm, found := GetModelRequestRateLimitRPM("free-model")
-	require.True(t, found)
-	require.Equal(t, 3, rpm)
+	require.True(t, ShouldApplyModelRequestRateLimit("free-model"))
+	require.False(t, ShouldApplyModelRequestRateLimit("Free-Model"))
+	require.False(t, ShouldApplyModelRequestRateLimit("other-model"))
 
-	_, found = GetModelRequestRateLimitRPM("Free-Model")
-	require.False(t, found)
+	require.NoError(t, UpdateModelRequestRateLimitModelsByJSONString(
+		`{"mode":"all","models":[]}`,
+	))
+	require.True(t, ShouldApplyModelRequestRateLimit("other-model"))
 }

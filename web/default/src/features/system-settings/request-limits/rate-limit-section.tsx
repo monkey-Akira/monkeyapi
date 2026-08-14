@@ -21,10 +21,9 @@ import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Code2, Palette, Plus, Trash2 } from 'lucide-react'
+import { Code2, Palette } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { ComboboxInput } from '@/components/ui/combobox-input'
 import {
   Form,
   FormControl,
@@ -37,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { MultiSelect } from '@/components/multi-select'
 import { getEnabledModels } from '@/features/channels/api'
 import {
   SettingsForm,
@@ -67,79 +67,68 @@ const isValidJSON = (value: string | undefined) => {
   }
 }
 
+type ModelRateLimitScope = 'all' | 'selected'
+
 type ModelRateLimitConfig = {
-  enabled: boolean
-  limits: Record<string, number>
+  mode: ModelRateLimitScope
+  models: string[]
 }
 
 const EMPTY_MODEL_RATE_LIMIT_CONFIG: ModelRateLimitConfig = {
-  enabled: false,
-  limits: {},
+  mode: 'all',
+  models: [],
 }
 
-function parseModelRateLimitConfig(value: string): ModelRateLimitConfig {
+function normalizeModelRateLimitConfig(
+  value: string
+): ModelRateLimitConfig | null {
   try {
     const parsed = JSON.parse(value) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return EMPTY_MODEL_RATE_LIMIT_CONFIG
+      return null
     }
-    const candidate = parsed as Partial<ModelRateLimitConfig>
+    const candidate = parsed as Partial<ModelRateLimitConfig> & {
+      enabled?: boolean
+      limits?: Record<string, number>
+    }
+
+    let mode = candidate.mode
+    let models = candidate.models
     if (
-      typeof candidate.enabled !== 'boolean' ||
-      !candidate.limits ||
-      typeof candidate.limits !== 'object' ||
-      Array.isArray(candidate.limits)
+      mode === undefined &&
+      typeof candidate.enabled === 'boolean' &&
+      candidate.limits &&
+      typeof candidate.limits === 'object' &&
+      !Array.isArray(candidate.limits)
     ) {
-      return EMPTY_MODEL_RATE_LIMIT_CONFIG
+      models = Object.keys(candidate.limits)
+      mode = candidate.enabled ? 'selected' : 'all'
     }
-    const limits: Record<string, number> = {}
-    for (const [modelName, rpm] of Object.entries(candidate.limits)) {
-      if (
-        modelName.trim() !== modelName ||
-        modelName.length === 0 ||
-        typeof rpm !== 'number' ||
-        !Number.isInteger(rpm) ||
-        rpm < 1 ||
-        rpm > 100000000
-      ) {
-        return EMPTY_MODEL_RATE_LIMIT_CONFIG
-      }
-      limits[modelName] = rpm
+
+    if ((mode !== 'all' && mode !== 'selected') || !Array.isArray(models)) {
+      return null
     }
-    return { enabled: candidate.enabled, limits }
+    const normalizedModels = [...new Set(models.map((model) => model.trim()))]
+    if (normalizedModels.some((model) => model.length === 0)) {
+      return null
+    }
+    return {
+      mode,
+      models: mode === 'all' ? [] : normalizedModels.sort(),
+    }
   } catch {
-    return EMPTY_MODEL_RATE_LIMIT_CONFIG
+    return null
   }
+}
+
+function parseModelRateLimitConfig(value: string): ModelRateLimitConfig {
+  return normalizeModelRateLimitConfig(value) ?? EMPTY_MODEL_RATE_LIMIT_CONFIG
 }
 
 function isValidModelRateLimitConfig(value: string | undefined) {
   if (!value) return false
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return false
-    }
-    const candidate = parsed as Partial<ModelRateLimitConfig>
-    if (
-      typeof candidate.enabled !== 'boolean' ||
-      !candidate.limits ||
-      typeof candidate.limits !== 'object' ||
-      Array.isArray(candidate.limits)
-    ) {
-      return false
-    }
-    return Object.entries(candidate.limits).every(
-      ([modelName, rpm]) =>
-        modelName.trim() === modelName &&
-        modelName.length > 0 &&
-        typeof rpm === 'number' &&
-        Number.isInteger(rpm) &&
-        rpm >= 1 &&
-        rpm <= 100000000
-    )
-  } catch {
-    return false
-  }
+  const config = normalizeModelRateLimitConfig(value)
+  return Boolean(config && (config.mode === 'all' || config.models.length > 0))
 }
 
 type ModelRateLimitEditorProps = {
@@ -150,8 +139,6 @@ type ModelRateLimitEditorProps = {
 function ModelRateLimitEditor({ value, onChange }: ModelRateLimitEditorProps) {
   const { t } = useTranslation()
   const config = useMemo(() => parseModelRateLimitConfig(value), [value])
-  const [selectedModel, setSelectedModel] = useState('')
-  const [rpm, setRpm] = useState(10)
   const enabledModelsQuery = useQuery({
     queryKey: ['channels', 'enabled-models'],
     queryFn: getEnabledModels,
@@ -160,157 +147,63 @@ function ModelRateLimitEditor({ value, onChange }: ModelRateLimitEditorProps) {
   const modelOptions = useMemo(
     () =>
       [...new Set(enabledModelsQuery.data?.data ?? [])]
-        .filter((modelName) => !(modelName in config.limits))
         .sort()
         .map((modelName) => ({ label: modelName, value: modelName })),
-    [config.limits, enabledModelsQuery.data?.data]
-  )
-  const configuredModels = useMemo(
-    () =>
-      Object.entries(config.limits).sort(([left], [right]) =>
-        left.localeCompare(right)
-      ),
-    [config.limits]
+    [enabledModelsQuery.data?.data]
   )
 
   const updateConfig = (next: ModelRateLimitConfig) => {
-    onChange(JSON.stringify(next))
-  }
-
-  const addModel = () => {
-    if (!selectedModel || !Number.isInteger(rpm) || rpm < 1 || rpm > 100000000)
-      return
-    updateConfig({
-      ...config,
-      limits: { ...config.limits, [selectedModel]: rpm },
-    })
-    setSelectedModel('')
-  }
-
-  const updateRPM = (modelName: string, nextRPM: number) => {
-    if (!Number.isInteger(nextRPM) || nextRPM < 1 || nextRPM > 100000000) {
-      return
-    }
-    updateConfig({
-      ...config,
-      limits: { ...config.limits, [modelName]: nextRPM },
-    })
-  }
-
-  const removeModel = (modelName: string) => {
-    const nextLimits = { ...config.limits }
-    delete nextLimits[modelName]
-    updateConfig({ ...config, limits: nextLimits })
+    onChange(
+      JSON.stringify({
+        mode: next.mode,
+        models:
+          next.mode === 'selected' ? [...new Set(next.models)].sort() : [],
+      })
+    )
   }
 
   return (
     <div className='space-y-4'>
       <div className='flex items-center justify-between gap-4'>
         <div className='space-y-1'>
-          <FormLabel>{t('Enable per-model limits')}</FormLabel>
+          <FormLabel>{t('Limit only selected models')}</FormLabel>
           <FormDescription>
-            {t(
-              'Limits are counted separately for each user and original model name.'
-            )}
+            {t('When disabled, the existing limits apply to all models.')}
           </FormDescription>
         </div>
         <Switch
-          checked={config.enabled}
-          onCheckedChange={(enabled) => updateConfig({ ...config, enabled })}
-        />
-      </div>
-
-      <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]'>
-        <ComboboxInput
-          options={modelOptions}
-          value={selectedModel}
-          onValueChange={setSelectedModel}
-          placeholder={t('Search enabled models')}
-          emptyText={t('No available models')}
-        />
-        <div className='relative'>
-          <Input
-            type='number'
-            min={1}
-            max={100000000}
-            step={1}
-            value={rpm}
-            onChange={(event) => setRpm(Number(event.target.value))}
-            aria-label={t('Requests per minute')}
-            className='pr-12'
-          />
-          <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs'>
-            RPM
-          </span>
-        </div>
-        <Button
-          type='button'
-          onClick={addModel}
-          disabled={
-            !selectedModel ||
-            !Number.isInteger(rpm) ||
-            rpm < 1 ||
-            rpm > 100000000
+          checked={config.mode === 'selected'}
+          onCheckedChange={(selectedOnly) =>
+            updateConfig({
+              mode: selectedOnly ? 'selected' : 'all',
+              models: selectedOnly ? config.models : [],
+            })
           }
-        >
-          <Plus />
-          {t('Add limit')}
-        </Button>
+        />
       </div>
 
-      {configuredModels.length === 0 ? (
-        <div className='text-muted-foreground rounded-md border border-dashed px-4 py-6 text-center text-sm'>
-          {t('No model limits configured')}
-        </div>
-      ) : (
-        <div className='divide-border rounded-md border'>
-          {configuredModels.map(([modelName, modelRPM]) => (
-            <div
-              key={modelName}
-              className='grid min-h-12 items-center gap-3 border-b px-3 py-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_9rem_2.25rem]'
-            >
-              <span className='min-w-0 truncate text-sm font-medium'>
-                {modelName}
-              </span>
-              <div className='relative'>
-                <Input
-                  type='number'
-                  min={1}
-                  max={100000000}
-                  step={1}
-                  value={modelRPM}
-                  onChange={(event) =>
-                    updateRPM(modelName, Number(event.target.value))
-                  }
-                  aria-label={t('{{model}} requests per minute', {
-                    model: modelName,
-                  })}
-                  className='h-8 pr-12'
-                />
-                <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs'>
-                  RPM
-                </span>
-              </div>
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon'
-                title={t('Remove {{model}}', { model: modelName })}
-                onClick={() => removeModel(modelName)}
-              >
-                <Trash2 />
-                <span className='sr-only'>
-                  {t('Remove {{model}}', { model: modelName })}
-                </span>
-              </Button>
-            </div>
-          ))}
+      {config.mode === 'selected' && (
+        <div className='space-y-2'>
+          <FormLabel>{t('Models using the shared rate limit')}</FormLabel>
+          <MultiSelect
+            options={modelOptions}
+            selected={config.models}
+            onChange={(models) => updateConfig({ mode: 'selected', models })}
+            placeholder={t('Search enabled models')}
+            emptyText={t('No available models')}
+            maxVisibleChips={8}
+          />
+          {config.models.length === 0 && (
+            <p className='text-destructive text-sm'>
+              {t('Select at least one model when limiting selected models.')}
+            </p>
+          )}
         </div>
       )}
 
       <FormDescription>
         {t(
-          'All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.'
+          'Selected models share the period, total request limit, successful request limit, and group overrides configured above.'
         )}
       </FormDescription>
     </div>
@@ -332,7 +225,7 @@ const createRateLimitSchema = (t: (key: string) => string) =>
     ModelRequestRateLimitModels: z
       .string()
       .refine(isValidModelRateLimitConfig, {
-        message: t('Invalid per-model rate limit configuration'),
+        message: t('Invalid model rate limit scope configuration'),
       }),
   })
 
@@ -574,7 +467,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
             name='ModelRequestRateLimitModels'
             render={({ field }) => (
               <FormItem className='border-border border-t pt-5'>
-                <FormLabel>{t('Per-model rate limits')}</FormLabel>
+                <FormLabel>{t('Model scope')}</FormLabel>
                 <FormControl>
                   <ModelRateLimitEditor
                     value={field.value}

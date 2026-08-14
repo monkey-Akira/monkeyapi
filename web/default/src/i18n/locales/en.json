@@ -4552,14 +4552,13 @@
     "Matching requests are marked in usage logs, but charges are unchanged.": "Matching requests are marked in usage logs, but charges are unchanged.",
     "Matching requests are settled at zero and receive a separate refund log.": "Matching requests are settled at zero and receive a separate refund log.",
     "Empty response automatic refund": "Empty response automatic refund",
-    "Enable per-model limits": "Enable per-model limits",
-    "Limits are counted separately for each user and original model name.": "Limits are counted separately for each user and original model name.",
+    "Limit only selected models": "Limit only selected models",
+    "When disabled, the existing limits apply to all models.": "When disabled, the existing limits apply to all models.",
+    "Models using the shared rate limit": "Models using the shared rate limit",
     "Search enabled models": "Search enabled models",
-    "Add limit": "Add limit",
-    "No model limits configured": "No model limits configured",
-    "{{model}} requests per minute": "{{model}} requests per minute",
-    "Per-model rate limits": "Per-model rate limits",
-    "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.": "All attempts count toward the 60-second window. Exceeded requests return HTTP 429 before an upstream channel is selected.",
-    "Invalid per-model rate limit configuration": "Invalid per-model rate limit configuration"
+    "Select at least one model when limiting selected models.": "Select at least one model when limiting selected models.",
+    "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Selected models share the period, total request limit, successful request limit, and group overrides configured above.",
+    "Invalid model rate limit scope configuration": "Invalid model rate limit scope configuration",
+    "Model scope": "Model scope"
   }
 }
