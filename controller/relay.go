@@ -68,6 +68,7 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	requestId := c.GetString(common.RequestIdKey)
+	common.SetContextKey(c, constant.ContextKeyRelayRequestSucceeded, false)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
@@ -221,6 +222,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		if newAPIError == nil {
+			relaySucceeded := true
+			if relayInfo.StreamStatus != nil {
+				relaySucceeded = relayInfo.StreamStatus.IsNormalEnd() && !relayInfo.StreamStatus.HasErrors()
+			}
+			common.SetContextKey(c, constant.ContextKeyRelayRequestSucceeded, relaySucceeded)
 			relayInfo.LastError = nil
 			return
 		}
