@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -144,8 +145,17 @@ func UniversalVerify(c *gin.Context) {
 
 func setSecureVerificationSession(c *gin.Context, method string) (int64, error) {
 	session := sessions.Default(c)
-	session.Delete(PasskeyReadySessionKey)
 	now := time.Now().Unix()
+	if token, ok := session.Get(service.AdminSessionTokenKey).(string); ok && token != "" {
+		if _, err := service.ConsumeAdminPasskeyReady(token); err != nil {
+			return 0, err
+		}
+		if err := service.SetAdminSecureVerification(token, now, method); err != nil {
+			return 0, err
+		}
+		return now, nil
+	}
+	session.Delete(PasskeyReadySessionKey)
 	session.Set(SecureVerificationSessionKey, now)
 	session.Set(secureVerificationMethodSessionKey, method)
 	if err := session.Save(); err != nil {
@@ -156,6 +166,16 @@ func setSecureVerificationSession(c *gin.Context, method string) (int64, error) 
 
 func consumePasskeyReady(c *gin.Context) (bool, error) {
 	session := sessions.Default(c)
+	if token, ok := session.Get(service.AdminSessionTokenKey).(string); ok && token != "" {
+		readyAt, err := service.ConsumeAdminPasskeyReady(token)
+		if err != nil {
+			return false, err
+		}
+		if readyAt == 0 || time.Now().Unix()-readyAt >= PasskeyReadyTimeout {
+			return false, nil
+		}
+		return true, nil
+	}
 	readyAtRaw := session.Get(PasskeyReadySessionKey)
 	if readyAtRaw == nil {
 		return false, nil

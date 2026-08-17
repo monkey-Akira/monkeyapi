@@ -98,15 +98,40 @@ func setupLogin(user *model.User, c *gin.Context) {
 		common.SysLog(fmt.Sprintf("failed to record user login ip for user %d: %v", user.Id, err))
 	}
 	session := sessions.Default(c)
-	session.Set("id", user.Id)
-	session.Set("username", user.Username)
-	session.Set("role", user.Role)
-	session.Set("status", user.Status)
-	session.Set("group", user.Group)
+	oldAdminSessionToken, _ := session.Get(service.AdminSessionTokenKey).(string)
+	adminSessionToken := ""
+	if user.Role == common.RoleAdminUser || user.Role == common.RoleRootUser {
+		var err error
+		adminSessionToken, err = service.CreateAdminSession(user.Id)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("failed to create administrator session for user %d: %v", user.Id, err))
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	}
+
+	session.Clear()
+	if adminSessionToken != "" {
+		session.Set(service.AdminSessionTokenKey, adminSessionToken)
+	} else {
+		session.Set("id", user.Id)
+		session.Set("username", user.Username)
+		session.Set("role", user.Role)
+		session.Set("status", user.Status)
+		session.Set("group", user.Group)
+	}
 	err := session.Save()
 	if err != nil {
+		if adminSessionToken != "" {
+			_ = service.DeleteAdminSession(adminSessionToken)
+		}
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
 		return
+	}
+	if oldAdminSessionToken != "" && oldAdminSessionToken != adminSessionToken {
+		if err := service.DeleteAdminSession(oldAdminSessionToken); err != nil {
+			common.SysLog(fmt.Sprintf("failed to delete replaced administrator session for user %d: %v", user.Id, err))
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
@@ -124,6 +149,16 @@ func setupLogin(user *model.User, c *gin.Context) {
 
 func Logout(c *gin.Context) {
 	session := sessions.Default(c)
+	if adminSessionToken, ok := session.Get(service.AdminSessionTokenKey).(string); ok && adminSessionToken != "" {
+		if err := service.DeleteAdminSession(adminSessionToken); err != nil {
+			common.SysLog(fmt.Sprintf("failed to delete administrator session during logout: %v", err))
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"message": "administrator session service is temporarily unavailable",
+				"success": false,
+			})
+			return
+		}
+	}
 	session.Clear()
 	err := session.Save()
 	if err != nil {
@@ -756,6 +791,11 @@ func UpdateUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if updatePassword || originUser.Role != updatedUser.Role || originUser.Status != updatedUser.Status {
+		if err := service.DeleteAdminSessionsForUser(updatedUser.Id); err != nil && common.RedisEnabled {
+			common.SysLog(fmt.Sprintf("failed to revoke administrator sessions for user %d: %v", updatedUser.Id, err))
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -905,6 +945,11 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if updatePassword && c.GetInt("role") >= common.RoleAdminUser {
+		if err := service.DeleteAdminSessionsForUser(cleanUser.Id); err != nil {
+			common.SysLog(fmt.Sprintf("failed to revoke administrator sessions after password change for user %d: %v", cleanUser.Id, err))
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -954,6 +999,9 @@ func DeleteUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := service.DeleteAdminSessionsForUser(id); err != nil && common.RedisEnabled {
+		common.SysLog(fmt.Sprintf("failed to revoke administrator sessions for deleted user %d: %v", id, err))
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -974,6 +1022,9 @@ func DeleteSelf(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if err := service.DeleteAdminSessionsForUser(id); err != nil && common.RedisEnabled {
+		common.SysLog(fmt.Sprintf("failed to revoke administrator sessions for deleted user %d: %v", id, err))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1078,6 +1129,9 @@ func ManageUser(c *gin.Context) {
 		if err := model.InvalidateUserTokensCache(user.Id); err != nil {
 			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 		}
+		if err := service.DeleteAdminSessionsForUser(user.Id); err != nil && common.RedisEnabled {
+			common.SysLog(fmt.Sprintf("failed to revoke administrator sessions for deleted user %d: %v", user.Id, err))
+		}
 	case "promote":
 		if myRole != common.RoleRootUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
@@ -1151,6 +1205,11 @@ func ManageUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if req.Action == "disable" || req.Action == "enable" || req.Action == "promote" || req.Action == "demote" {
+		if err := service.DeleteAdminSessionsForUser(user.Id); err != nil && common.RedisEnabled {
+			common.SysLog(fmt.Sprintf("failed to revoke administrator sessions for user %d: %v", user.Id, err))
+		}
+	}
 	// 禁用 / 角色调整后，强制失效用户缓存与其全部令牌缓存，
 	// 避免在 Redis TTL 过期前仍使用旧状态（尤其是禁用后仍可发起请求的问题）。
 	// InvalidateUserCache 会让下一次 GetUserCache 从数据库重新加载，
@@ -1192,10 +1251,8 @@ func EmailBind(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
 		return
 	}
-	session := sessions.Default(c)
-	id := session.Get("id")
 	user := model.User{
-		Id: id.(int),
+		Id: c.GetInt("id"),
 	}
 	err := user.FillUserById()
 	if err != nil {

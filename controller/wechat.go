@@ -12,7 +12,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
@@ -159,10 +158,8 @@ func WeChatBind(c *gin.Context) {
 		})
 		return
 	}
-	session := sessions.Default(c)
-	id := session.Get("id")
 	user := model.User{
-		Id: id.(int),
+		Id: c.GetInt("id"),
 	}
 	err = user.FillUserById()
 	if err != nil {

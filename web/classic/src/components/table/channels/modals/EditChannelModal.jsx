@@ -63,12 +63,8 @@ import OllamaModelModal from './OllamaModelModal';
 import CodexOAuthModal from './CodexOAuthModal';
 import ParamOverrideEditorModal from './ParamOverrideEditorModal';
 import JSONEditor from '../../../common/ui/JSONEditor';
-import SecureVerificationModal from '../../../common/modals/SecureVerificationModal';
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
-import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
-import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
 import { parseChannelConnectionString } from '../../../../helpers/token';
-import { createApiCalls } from '../../../../services/secureVerification';
 import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
@@ -387,16 +383,6 @@ const EditChannelModal = (props) => {
   const [paramOverrideEditorVisible, setParamOverrideEditorVisible] =
     useState(false);
 
-  // 密钥显示状态
-  const [keyDisplayState, setKeyDisplayState] = useState({
-    showModal: false,
-    keyData: '',
-  });
-
-  // 专门的2FA验证状态（用于TwoFactorAuthModal）
-  const [show2FAVerifyModal, setShow2FAVerifyModal] = useState(false);
-  const [verifyCode, setVerifyCode] = useState('');
-
   useEffect(() => {
     if (!isEdit) {
       setIsIonetChannel(false);
@@ -411,7 +397,6 @@ const EditChannelModal = (props) => {
     const targetUrl = `/console/deployment?deployment_id=${ionetMetadata.deployment_id}`;
     window.open(targetUrl, '_blank', 'noopener');
   };
-  const [verifyLoading, setVerifyLoading] = useState(false);
   const statusCodeRiskConfirmResolverRef = useRef(null);
   const [statusCodeRiskConfirmVisible, setStatusCodeRiskConfirmVisible] =
     useState(false);
@@ -445,56 +430,6 @@ const EditChannelModal = (props) => {
       </span>
     </Tooltip>
   );
-
-  // 2FA状态更新辅助函数
-  const updateTwoFAState = (updates) => {
-    setTwoFAState((prev) => ({ ...prev, ...updates }));
-  };
-  // 使用通用安全验证 Hook
-  const {
-    isModalVisible,
-    verificationMethods,
-    verificationState,
-    withVerification,
-    executeVerification,
-    cancelVerification,
-    setVerificationCode,
-    switchVerificationMethod,
-  } = useSecureVerification({
-    onSuccess: (result) => {
-      // 验证成功后显示密钥
-      console.log('Verification success, result:', result);
-      if (result && result.success && result.data?.key) {
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.data.key,
-        });
-      } else if (result && result.key) {
-        // 直接返回了 key（没有包装在 data 中）
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.key,
-        });
-      }
-    },
-  });
-
-  // 重置密钥显示状态
-  const resetKeyDisplayState = () => {
-    setKeyDisplayState({
-      showModal: false,
-      keyData: '',
-    });
-  };
-
-  // 重置2FA验证状态
-  const reset2FAVerifyState = () => {
-    setShow2FAVerifyModal(false);
-    setVerifyCode('');
-    setVerifyLoading(false);
-  };
 
   const handleApiConfigSecretClick = () => {
     if (inputs.type !== 45) return;
@@ -1200,33 +1135,6 @@ const EditChannelModal = (props) => {
     }
   };
 
-  // 查看渠道密钥（透明验证）
-  const handleShow2FAModal = async () => {
-    try {
-      // 使用 withVerification 包装，会自动处理需要验证的情况
-      const result = await withVerification(
-        createApiCalls.viewChannelKey(channelId),
-        {
-          title: t('查看渠道密钥'),
-          description: t('为了保护账户安全，请验证您的身份。'),
-          preferredMethod: 'passkey', // 优先使用 Passkey
-        },
-      );
-
-      // 如果直接返回了结果（已验证），显示密钥
-      if (result && result.success && result.data?.key) {
-        showSuccess(t('密钥获取成功'));
-        setKeyDisplayState({
-          showModal: true,
-          keyData: result.data.key,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to view channel key:', error);
-      showError(error.message || t('获取密钥失败'));
-    }
-  };
-
   const handleCodexOAuthGenerated = (key) => {
     handleInputChange('key', key);
     formatJsonField('key');
@@ -1401,8 +1309,6 @@ const EditChannelModal = (props) => {
     }
     // 重置本地输入，避免下次打开残留上一次的 JSON 字段值
     setInputs(getInitValues());
-    // 重置密钥显示状态
-    resetKeyDisplayState();
     // 重置剪贴板检测状态
     setClipboardConfig(null);
   };
@@ -2797,16 +2703,6 @@ const EditChannelModal = (props) => {
                                     )}
                                   </Text>
                                 )}
-                              {isEdit && (
-                                <Button
-                                  size='small'
-                                  type='primary'
-                                  theme='outline'
-                                  onClick={handleShow2FAModal}
-                                >
-                                  {t('查看密钥')}
-                                </Button>
-                              )}
                               {batchExtra}
                             </div>
                           }
@@ -2883,17 +2779,6 @@ const EditChannelModal = (props) => {
                                     >
                                       {t('格式化')}
                                     </Button>
-                                    {isEdit && (
-                                      <Button
-                                        size='small'
-                                        type='primary'
-                                        theme='outline'
-                                        onClick={handleShow2FAModal}
-                                        disabled={isIonetLocked}
-                                      >
-                                        {t('查看密钥')}
-                                      </Button>
-                                    )}
                                     {batchExtra}
                                   </Space>
                                 </div>
@@ -3012,16 +2897,6 @@ const EditChannelModal = (props) => {
                                           )}
                                         </Text>
                                       )}
-                                    {isEdit && (
-                                      <Button
-                                        size='small'
-                                        type='primary'
-                                        theme='outline'
-                                        onClick={handleShow2FAModal}
-                                      >
-                                        {t('查看密钥')}
-                                      </Button>
-                                    )}
                                     {batchExtra}
                                   </div>
                                 }
@@ -3093,16 +2968,6 @@ const EditChannelModal = (props) => {
                                       )}
                                     </Text>
                                   )}
-                                {isEdit && (
-                                  <Button
-                                    size='small'
-                                    type='primary'
-                                    theme='outline'
-                                    onClick={handleShow2FAModal}
-                                  >
-                                    {t('查看密钥')}
-                                  </Button>
-                                )}
                                 {batchExtra}
                               </div>
                             }
@@ -3795,60 +3660,6 @@ const EditChannelModal = (props) => {
         onCancel={() => resolveStatusCodeRiskConfirm(false)}
         onConfirm={() => resolveStatusCodeRiskConfirm(true)}
       />
-      {/* 使用通用安全验证模态框 */}
-      <SecureVerificationModal
-        visible={isModalVisible}
-        verificationMethods={verificationMethods}
-        verificationState={verificationState}
-        onVerify={executeVerification}
-        onCancel={cancelVerification}
-        onCodeChange={setVerificationCode}
-        onMethodSwitch={switchVerificationMethod}
-        title={verificationState.title}
-        description={verificationState.description}
-      />
-
-      {/* 使用ChannelKeyDisplay组件显示密钥 */}
-      <Modal
-        title={
-          <div className='flex items-center'>
-            <div className='w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mr-3'>
-              <svg
-                className='w-4 h-4 text-green-600 dark:text-green-400'
-                fill='currentColor'
-                viewBox='0 0 20 20'
-              >
-                <path
-                  fillRule='evenodd'
-                  d='M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z'
-                  clipRule='evenodd'
-                />
-              </svg>
-            </div>
-            {t('渠道密钥信息')}
-          </div>
-        }
-        visible={keyDisplayState.showModal}
-        onCancel={resetKeyDisplayState}
-        footer={
-          <Button type='primary' onClick={resetKeyDisplayState}>
-            {t('完成')}
-          </Button>
-        }
-        width={700}
-        style={{ maxWidth: '90vw' }}
-      >
-        <ChannelKeyDisplay
-          keyData={keyDisplayState.keyData}
-          showSuccessIcon={true}
-          successText={t('密钥获取成功')}
-          showWarning={true}
-          warningText={t(
-            '请妥善保管密钥信息，不要泄露给他人。如有安全疑虑，请及时更换密钥。',
-          )}
-        />
-      </Modal>
-
       <ParamOverrideEditorModal
         visible={paramOverrideEditorVisible}
         value={inputs.param_override || ''}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	passkeysvc "github.com/QuantumNous/new-api/service/passkey"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -489,6 +490,21 @@ func PasskeyVerifyFinish(c *gin.Context) {
 
 	session := sessions.Default(c)
 	// Mark passkey as ready; /api/verify will convert this into the final secure verification session.
+	if token, ok := session.Get(service.AdminSessionTokenKey).(string); ok && token != "" {
+		if err := service.SetAdminPasskeyReady(token, time.Now().Unix()); err != nil {
+			common.ApiError(c, fmt.Errorf("保存验证状态失败: %v", err))
+			return
+		}
+		if err := service.ClearAdminSecureVerification(token); err != nil {
+			common.ApiError(c, fmt.Errorf("清除旧验证状态失败: %v", err))
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Passkey 验证成功",
+		})
+		return
+	}
 	session.Set(PasskeyReadySessionKey, time.Now().Unix())
 	session.Delete(SecureVerificationSessionKey)
 	session.Delete(secureVerificationMethodSessionKey)
@@ -504,14 +520,9 @@ func PasskeyVerifyFinish(c *gin.Context) {
 }
 
 func getSessionUser(c *gin.Context) (*model.User, error) {
-	session := sessions.Default(c)
-	idRaw := session.Get("id")
-	if idRaw == nil {
+	id := c.GetInt("id")
+	if id == 0 {
 		return nil, errors.New("未登录")
-	}
-	id, ok := idRaw.(int)
-	if !ok {
-		return nil, errors.New("无效的会话信息")
 	}
 	user := &model.User{Id: id}
 	if err := user.FillUserById(); err != nil {
@@ -563,6 +574,19 @@ func requirePasskeyDeleteVerification(c *gin.Context, userID int) bool {
 
 func requireSecureVerificationMethod(c *gin.Context, method string) bool {
 	session := sessions.Default(c)
+	if token, ok := session.Get(service.AdminSessionTokenKey).(string); ok && token != "" {
+		verification, err := service.GetAdminSecureVerification(token)
+		if err != nil || verification.VerifiedAt == 0 || time.Now().Unix()-verification.VerifiedAt >= SecureVerificationTimeout {
+			_ = service.ClearAdminSecureVerification(token)
+			common.ApiErrorMsg(c, "请先完成安全验证")
+			return false
+		}
+		if verification.Method != method {
+			common.ApiErrorMsg(c, "请先完成对应的安全验证")
+			return false
+		}
+		return true
+	}
 	verifiedAt, ok := session.Get(SecureVerificationSessionKey).(int64)
 	if !ok || time.Now().Unix()-verifiedAt >= SecureVerificationTimeout {
 		session.Delete(SecureVerificationSessionKey)

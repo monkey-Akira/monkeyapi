@@ -37,7 +37,6 @@ import {
   FileText,
   Eraser,
   Plus,
-  Eye,
   Link2,
   RefreshCw,
   Code,
@@ -102,14 +101,9 @@ import {
 import { JsonEditor } from '@/components/json-editor'
 import { MultiSelect } from '@/components/multi-select'
 import {
-  SecureVerificationDialog,
-  useSecureVerification,
-} from '@/features/auth/secure-verification'
-import {
   fetchModels,
   getAllModels,
   getChannel,
-  getChannelKey,
   getGroups,
   getPrefillGroups,
   refreshCodexCredential,
@@ -279,8 +273,6 @@ export function ChannelMutateDrawer({
   const queryClient = useQueryClient()
   const { setOpen } = useChannels()
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
-  const [channelKey, setChannelKey] = useState<string | null>(null)
-  const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
     useState(false)
@@ -332,26 +324,6 @@ export function ChannelMutateDrawer({
   })
 
   const { copyToClipboard } = useCopyToClipboard()
-
-  const {
-    open: verificationOpen,
-    methods: verificationMethods,
-    state: verificationState,
-    executeVerification,
-    withVerification,
-    cancel: cancelVerification,
-    setCode: setVerificationCode,
-    switchMethod: switchVerificationMethod,
-  } = useSecureVerification()
-
-  useEffect(() => {
-    if (!open) {
-      setChannelKey(null)
-      setIsChannelKeyLoading(false)
-    } else if (channelId) {
-      setChannelKey(null)
-    }
-  }, [open, channelId])
 
   // Check if this is a multi-key channel
   const isMultiKeyChannel =
@@ -675,44 +647,6 @@ export function ChannelMutateDrawer({
       )
     }
   }
-
-  const fetchChannelKey = useCallback(async () => {
-    if (!channelId) {
-      throw new Error('Channel is not selected')
-    }
-
-    setIsChannelKeyLoading(true)
-    try {
-      const res = await getChannelKey(channelId)
-      if (!res.success) {
-        throw new Error(res.message || t('Failed to fetch channel key'))
-      }
-
-      const keyValue = res.data?.key ?? ''
-      setChannelKey(keyValue)
-      toast.success(t('Channel key unlocked'))
-      return res
-    } finally {
-      setIsChannelKeyLoading(false)
-    }
-  }, [channelId, t])
-
-  const handleRevealKey = useCallback(async () => {
-    if (!channelId) return
-
-    try {
-      await withVerification(fetchChannelKey, {
-        preferredMethod: 'passkey',
-        title: 'Verify to view channel key',
-        description:
-          'Use Passkey or 2FA to confirm your identity before revealing this channel key.',
-      })
-    } catch (error) {
-      if (error instanceof Error) {
-        toast.error(error.message)
-      }
-    }
-  }, [channelId, withVerification, fetchChannelKey])
 
   const handleRefreshCodexCredential = useCallback(async () => {
     if (!channelId) return
@@ -1922,62 +1856,6 @@ export function ChannelMutateDrawer({
                                   )}
                                 </div>
                               </FormDescription>
-                              {isEditing && (
-                                <div className='border-border/60 mt-4 flex flex-col gap-3 border-y border-dashed py-4'>
-                                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                    <div>
-                                      <p className='text-sm font-medium'>
-                                        {t('Current key')}
-                                      </p>
-                                      <p className='text-muted-foreground text-xs'>
-                                        {t(
-                                          'Verification required to reveal the saved key.'
-                                        )}
-                                      </p>
-                                    </div>
-                                    <div className='flex items-center gap-2'>
-                                      <Button
-                                        type='button'
-                                        variant='outline'
-                                        size='sm'
-                                        onClick={handleRevealKey}
-                                        disabled={
-                                          isChannelKeyLoading ||
-                                          verificationState.loading
-                                        }
-                                      >
-                                        {isChannelKeyLoading ||
-                                        verificationState.loading ? (
-                                          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                                        ) : (
-                                          <Eye className='mr-2 h-4 w-4' />
-                                        )}
-                                        {t('Reveal key')}
-                                      </Button>
-                                      <Button
-                                        type='button'
-                                        variant='ghost'
-                                        size='sm'
-                                        onClick={async () => {
-                                          if (channelKey) {
-                                            await copyToClipboard(channelKey)
-                                          }
-                                        }}
-                                        disabled={!channelKey}
-                                      >
-                                        <Copy className='mr-2 h-4 w-4' />
-                                        {t('Copy')}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <Input
-                                    readOnly
-                                    value={channelKey ?? ''}
-                                    placeholder={t('Hidden — verify to reveal')}
-                                    className='font-mono'
-                                  />
-                                </div>
-                              )}
                               <FormMessage />
                             </FormItem>
                           )
@@ -3502,23 +3380,6 @@ export function ChannelMutateDrawer({
             ? parseModelsString(form.getValues('models') || '')
             : undefined
         }
-      />
-
-      <SecureVerificationDialog
-        open={verificationOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cancelVerification()
-          }
-        }}
-        methods={verificationMethods}
-        state={verificationState}
-        onVerify={async (method, code) => {
-          await executeVerification(method, code)
-        }}
-        onCancel={cancelVerification}
-        onCodeChange={setVerificationCode}
-        onMethodChange={switchVerificationMethod}
       />
 
       {/* Missing Models Confirmation Dialog */}

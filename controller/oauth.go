@@ -162,10 +162,8 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 		}
 	}
 
-	// Get current user from session
-	session := sessions.Default(c)
-	id := session.Get("id")
-	user := model.User{Id: id.(int)}
+	// Get current user from authenticated request context.
+	user := model.User{Id: c.GetInt("id")}
 	err = user.FillUserById()
 	if err != nil {
 		common.ApiError(c, err)

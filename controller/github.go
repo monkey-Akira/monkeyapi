@@ -198,10 +198,7 @@ func GitHubBind(c *gin.Context) {
 		})
 		return
 	}
-	session := sessions.Default(c)
-	id := session.Get("id")
-	// id := c.GetInt("id")  // critical bug!
-	user.Id = id.(int)
+	user.Id = c.GetInt("id")
 	err = user.FillUserById()
 	if err != nil {
 		common.ApiError(c, err)

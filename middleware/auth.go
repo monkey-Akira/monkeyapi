@@ -65,14 +65,52 @@ func clearInvalidSession(session sessions.Session) {
 	_ = session.Save()
 }
 
+func loadAdminSessionUser(session sessions.Session) (*model.User, bool, error) {
+	tokenRaw := session.Get(service.AdminSessionTokenKey)
+	if tokenRaw == nil {
+		return nil, false, nil
+	}
+	token, ok := sessionString(tokenRaw)
+	if !ok {
+		return nil, true, service.ErrAdminSessionUnavailable
+	}
+	userID, err := service.GetAdminSessionUserID(token)
+	if err != nil {
+		return nil, true, err
+	}
+	user, err := model.GetUserById(userID, false)
+	if err != nil {
+		return nil, true, err
+	}
+	return user, true, nil
+}
+
 func authHelper(c *gin.Context, minRole int) {
 	session := sessions.Default(c)
 	username := session.Get("username")
 	role := session.Get("role")
 	id := session.Get("id")
 	status := session.Get("status")
+	group := session.Get("group")
 	useAccessToken := false
-	if username == nil {
+	adminSessionUser, usesAdminSession, adminSessionErr := loadAdminSessionUser(session)
+	if adminSessionErr != nil {
+		common.SysLog("failed to load administrator session: " + adminSessionErr.Error())
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	if usesAdminSession {
+		username = adminSessionUser.Username
+		role = adminSessionUser.Role
+		id = adminSessionUser.Id
+		status = adminSessionUser.Status
+		group = adminSessionUser.Group
+	} else if username == nil {
 		// Check access token
 		accessToken := c.Request.Header.Get("Authorization")
 		if accessToken == "" {
@@ -114,6 +152,7 @@ func authHelper(c *gin.Context, minRole int) {
 			role = user.Role
 			id = user.Id
 			status = user.Status
+			group = user.Group
 			useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -156,6 +195,15 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	statusInt, ok := sessionInt(status)
 	if !ok {
+		clearInvalidSession(session)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+		})
+		c.Abort()
+		return
+	}
+	if !useAccessToken && !usesAdminSession && (minRole >= common.RoleAdminUser || roleInt >= common.RoleAdminUser) {
 		clearInvalidSession(session)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -221,8 +269,8 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Set("username", usernameStr)
 	c.Set("role", roleInt)
 	c.Set("id", idInt)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
+	c.Set("group", group)
+	c.Set("user_group", group)
 	c.Set("use_access_token", useAccessToken)
 
 	c.Next()
@@ -231,6 +279,17 @@ func authHelper(c *gin.Context, minRole int) {
 func TryUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
+		if user, usesAdminSession, err := loadAdminSessionUser(session); usesAdminSession {
+			if err == nil && user.Status == common.UserStatusEnabled {
+				c.Set("id", user.Id)
+			}
+			c.Next()
+			return
+		}
+		if role, ok := sessionInt(session.Get("role")); ok && role >= common.RoleAdminUser {
+			c.Next()
+			return
+		}
 		id := session.Get("id")
 		if id != nil {
 			c.Set("id", id)
@@ -267,6 +326,19 @@ func TokenOrUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		// Try session auth first (dashboard users)
 		session := sessions.Default(c)
+		if user, usesAdminSession, err := loadAdminSessionUser(session); usesAdminSession {
+			if err == nil && user.Status == common.UserStatusEnabled {
+				c.Set("id", user.Id)
+				c.Next()
+				return
+			}
+			TokenAuth()(c)
+			return
+		}
+		if role, ok := sessionInt(session.Get("role")); ok && role >= common.RoleAdminUser {
+			TokenAuth()(c)
+			return
+		}
 		if id := session.Get("id"); id != nil {
 			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
 				c.Set("id", id)
