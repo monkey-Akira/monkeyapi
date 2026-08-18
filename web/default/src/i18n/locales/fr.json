@@ -4527,6 +4527,13 @@
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Les modèles sélectionnés partagent la période, la limite totale, la limite des requêtes réussies et les règles de groupe configurées ci-dessus.",
     "Invalid model rate limit scope configuration": "Configuration de portée de limitation des modèles invalide",
     "Model scope": "Portée des modèles",
-    "Remove {{model}}": "Supprimer {{model}}"
+    "Remove {{model}}": "Supprimer {{model}}",
+    "Leave empty to use the quota as the name": "Laissez vide pour utiliser le quota comme nom",
+    "Redemption codes created successfully. Download them as a text file?": "Codes d'échange créés avec succès. Télécharger tous les codes dans un fichier texte ?",
+    "Last 10% reward threshold": "Seuil de récompense des 10 % finaux",
+    "20%-10% reward threshold": "Seuil de récompense de 20 % à 10 %",
+    "Yesterday consumption quota required to enter the last 10% reward range": "Quota consommé hier requis pour entrer dans la plage de récompense des 10 % finaux",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "Quota consommé hier requis pour entrer dans la plage de récompense de 20 % à 10 %. Définissez 0 pour désactiver ce palier.",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "Le seuil des 10 % finaux doit être supérieur au seuil de 20 % à 10 %."
   }
 }

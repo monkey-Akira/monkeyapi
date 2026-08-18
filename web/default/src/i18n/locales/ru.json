@@ -4527,6 +4527,13 @@
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Выбранные модели используют общие период, общий лимит запросов, лимит успешных запросов и правила групп, заданные выше.",
     "Invalid model rate limit scope configuration": "Недопустимая конфигурация области ограничения моделей",
     "Model scope": "Область моделей",
-    "Remove {{model}}": "Удалить {{model}}"
+    "Remove {{model}}": "Удалить {{model}}",
+    "Leave empty to use the quota as the name": "Оставьте пустым, чтобы использовать квоту в качестве имени",
+    "Redemption codes created successfully. Download them as a text file?": "Коды активации успешно созданы. Скачать все коды в текстовом файле?",
+    "Last 10% reward threshold": "Порог награды для последних 10%",
+    "20%-10% reward threshold": "Порог награды для диапазона 20%-10%",
+    "Yesterday consumption quota required to enter the last 10% reward range": "Объем, израсходованный вчера, необходимый для входа в диапазон награды последних 10%",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "Объем, израсходованный вчера, необходимый для входа в диапазон награды 20%-10%. Укажите 0, чтобы отключить этот уровень.",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "Порог последних 10% должен быть выше порога 20%-10%."
   }
 }

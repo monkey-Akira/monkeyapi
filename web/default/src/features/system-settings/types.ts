@@ -283,6 +283,8 @@ export type BillingSettings = {
   'checkin_setting.max_quota': number
   'checkin_setting.min_previous_day_requests': number
   'checkin_setting.min_single_redemption_quota': number
+  'checkin_setting.last_10_percent_consume_quota': number
+  'checkin_setting.twenty_to_ten_percent_consume_quota': number
 }
 
 export type OperationsSettings = {

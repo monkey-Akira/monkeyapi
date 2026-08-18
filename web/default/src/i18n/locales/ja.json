@@ -4527,6 +4527,13 @@
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "選択したモデルは、上記の期間、総リクエスト数、成功リクエスト数、グループ上書き設定を共有します。",
     "Invalid model rate limit scope configuration": "モデル制限範囲の設定が無効です",
     "Model scope": "モデルの範囲",
-    "Remove {{model}}": "{{model}} を削除"
+    "Remove {{model}}": "{{model}} を削除",
+    "Leave empty to use the quota as the name": "空欄の場合はクォータを名前として使用",
+    "Redemption codes created successfully. Download them as a text file?": "引き換えコードが正常に作成されました。すべてのコードをテキストファイルとしてダウンロードしますか？",
+    "Last 10% reward threshold": "最後の10%報酬のしきい値",
+    "20%-10% reward threshold": "20%-10%報酬のしきい値",
+    "Yesterday consumption quota required to enter the last 10% reward range": "最後の10%報酬範囲に入るために必要な前日の消費クォータ",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "20%-10%報酬範囲に入るために必要な前日の消費クォータ。0でこの段階を無効にします。",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "最後の10%のしきい値は20%-10%のしきい値より大きくする必要があります。"
   }
 }

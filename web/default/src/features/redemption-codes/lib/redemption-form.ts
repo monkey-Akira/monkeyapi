@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 import type { TFunction } from 'i18next'
-import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
+import {
+  formatQuota,
+  parseQuotaFromDollars,
+  quotaUnitsToDollars,
+} from '@/lib/format'
 import {
   REDEMPTION_VALIDATION,
   getRedemptionFormErrorMessages,
@@ -29,13 +33,19 @@ import { type RedemptionFormData, type Redemption } from '../types'
 // Form Schema (use getRedemptionFormSchema(t) in components for i18n messages)
 // ============================================================================
 
-export function getRedemptionFormSchema(t: TFunction) {
+export function getRedemptionFormSchema(t: TFunction, requireName = true) {
   const msg = getRedemptionFormErrorMessages(t)
+  const nameSchema = z.string().refine((value) => {
+    const trimmedValue = value.trim()
+    if (!requireName && trimmedValue.length === 0) return true
+    return (
+      trimmedValue.length >= REDEMPTION_VALIDATION.NAME_MIN_LENGTH &&
+      trimmedValue.length <= REDEMPTION_VALIDATION.NAME_MAX_LENGTH
+    )
+  }, msg.NAME_LENGTH_INVALID)
+
   return z.object({
-    name: z
-      .string()
-      .min(REDEMPTION_VALIDATION.NAME_MIN_LENGTH, msg.NAME_LENGTH_INVALID)
-      .max(REDEMPTION_VALIDATION.NAME_MAX_LENGTH, msg.NAME_LENGTH_INVALID),
+    name: nameSchema,
     quota_dollars: z.number().min(0, t('Quota must be a positive number')),
     expired_time: z.date().optional(),
     count: z
@@ -74,9 +84,11 @@ export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
 export function transformFormDataToPayload(
   data: RedemptionFormValues
 ): RedemptionFormData {
+  const quota = parseQuotaFromDollars(data.quota_dollars)
+
   return {
-    name: data.name,
-    quota: parseQuotaFromDollars(data.quota_dollars),
+    name: data.name.trim() || formatQuota(quota),
+    quota,
     expired_time: data.expired_time
       ? Math.floor(data.expired_time.getTime() / 1000)
       : 0,

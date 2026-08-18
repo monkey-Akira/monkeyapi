@@ -134,12 +134,27 @@ func UserCheckin(userId int) (*Checkin, error) {
 	if maxQuota < minQuota {
 		return nil, errors.New("未达到签到要求")
 	}
-	if setting.MaxQuota > 0 && previousDayQuota >= int64(setting.MaxQuota*5) {
+	last10PercentConsumeQuota := operation_setting.GetLast10PercentConsumeQuota()
+	if setting.MaxQuota > 0 && last10PercentConsumeQuota > 0 &&
+		previousDayQuota >= int64(last10PercentConsumeQuota) {
 		highRangeMin := (setting.MaxQuota*9 + 9) / 10
 		if highRangeMin > minQuota {
 			minQuota = highRangeMin
 		}
 		maxQuota = setting.MaxQuota
+	} else if setting.MaxQuota > 0 &&
+		setting.TwentyToTenPercentConsumeQuota > 0 &&
+		setting.TwentyToTenPercentConsumeQuota < last10PercentConsumeQuota &&
+		previousDayQuota >= int64(setting.TwentyToTenPercentConsumeQuota) {
+		midRangeMin := (setting.MaxQuota*8 + 9) / 10
+		midRangeMax := (setting.MaxQuota*9+9)/10 - 1
+		if midRangeMin < minQuota {
+			midRangeMin = minQuota
+		}
+		if midRangeMax >= midRangeMin {
+			minQuota = midRangeMin
+			maxQuota = midRangeMax
+		}
 	}
 
 	quotaAwarded := minQuota

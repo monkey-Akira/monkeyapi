@@ -4592,6 +4592,13 @@
     "Select at least one model when limiting selected models.": "选择指定模型限流时至少选择一个模型。",
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "所选模型共享上方配置的限流周期、总请求数、成功请求数和分组覆盖规则。",
     "Invalid model rate limit scope configuration": "模型限流范围配置无效",
-    "Model scope": "限流模型范围"
+    "Model scope": "限流模型范围",
+    "Leave empty to use the quota as the name": "留空时使用额度作为名称",
+    "Redemption codes created successfully. Download them as a text file?": "兑换码创建成功，是否下载包含全部兑换码的文本文件？",
+    "Last 10% reward threshold": "最后 10% 奖励阈值",
+    "20%-10% reward threshold": "20%-10% 奖励阈值",
+    "Yesterday consumption quota required to enter the last 10% reward range": "进入最后 10% 奖励区间所需的前一天消耗额度",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "进入 20%-10% 奖励区间所需的前一天消耗额度。设为 0 可关闭此档位。",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "最后 10% 阈值必须大于 20%-10% 阈值。"
   }
 }

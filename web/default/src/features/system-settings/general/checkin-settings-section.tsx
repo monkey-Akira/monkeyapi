@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -41,15 +42,35 @@ import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 
-const schema = z.object({
-  enabled: z.boolean(),
-  minQuota: z.coerce.number().int().min(0),
-  maxQuota: z.coerce.number().int().min(0),
-  minPreviousDayRequests: z.coerce.number().int().min(0),
-  minSingleRedemptionQuota: z.coerce.number().int().min(0),
-})
+function getSchema(t: TFunction) {
+  return z
+    .object({
+      enabled: z.boolean(),
+      minQuota: z.coerce.number().int().min(0),
+      maxQuota: z.coerce.number().int().min(0),
+      minPreviousDayRequests: z.coerce.number().int().min(0),
+      minSingleRedemptionQuota: z.coerce.number().int().min(0),
+      last10PercentConsumeQuota: z.coerce.number().int().min(0),
+      twentyToTenPercentConsumeQuota: z.coerce.number().int().min(0),
+    })
+    .superRefine((values, ctx) => {
+      if (
+        values.twentyToTenPercentConsumeQuota > 0 &&
+        values.last10PercentConsumeQuota <=
+          values.twentyToTenPercentConsumeQuota
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['last10PercentConsumeQuota'],
+          message: t(
+            'The last 10% threshold must be greater than the 20%-10% threshold.'
+          ),
+        })
+      }
+    })
+}
 
-type Values = z.infer<typeof schema>
+type Values = z.infer<ReturnType<typeof getSchema>>
 
 export function CheckinSettingsSection({
   defaultValues,
@@ -60,19 +81,24 @@ export function CheckinSettingsSection({
     maxQuota: number
     minPreviousDayRequests: number
     minSingleRedemptionQuota: number
+    last10PercentConsumeQuota: number
+    twentyToTenPercentConsumeQuota: number
   }
 }) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
 
   const form = useForm<Values>({
-    resolver: zodResolver(schema) as unknown as Resolver<Values>,
+    resolver: zodResolver(getSchema(t)) as unknown as Resolver<Values>,
     defaultValues: {
       enabled: defaultValues.enabled,
       minQuota: defaultValues.minQuota,
       maxQuota: defaultValues.maxQuota,
       minPreviousDayRequests: defaultValues.minPreviousDayRequests,
       minSingleRedemptionQuota: defaultValues.minSingleRedemptionQuota,
+      last10PercentConsumeQuota: defaultValues.last10PercentConsumeQuota,
+      twentyToTenPercentConsumeQuota:
+        defaultValues.twentyToTenPercentConsumeQuota,
     },
   })
 
@@ -113,12 +139,31 @@ export function CheckinSettingsSection({
     }
 
     if (
-      values.minSingleRedemptionQuota !==
-      defaultValues.minSingleRedemptionQuota
+      values.minSingleRedemptionQuota !== defaultValues.minSingleRedemptionQuota
     ) {
       updates.push({
         key: 'checkin_setting.min_single_redemption_quota',
         value: String(values.minSingleRedemptionQuota),
+      })
+    }
+
+    if (
+      values.last10PercentConsumeQuota !==
+      defaultValues.last10PercentConsumeQuota
+    ) {
+      updates.push({
+        key: 'checkin_setting.last_10_percent_consume_quota',
+        value: String(values.last10PercentConsumeQuota),
+      })
+    }
+
+    if (
+      values.twentyToTenPercentConsumeQuota !==
+      defaultValues.twentyToTenPercentConsumeQuota
+    ) {
+      updates.push({
+        key: 'checkin_setting.twenty_to_ten_percent_consume_quota',
+        value: String(values.twentyToTenPercentConsumeQuota),
       })
     }
 
@@ -216,12 +261,48 @@ export function CheckinSettingsSection({
 
               <FormField
                 control={form.control}
+                name='last10PercentConsumeQuota'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Last 10% reward threshold')}</FormLabel>
+                    <FormControl>
+                      <Input type='number' min={1} {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Yesterday consumption quota required to enter the last 10% reward range'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='twentyToTenPercentConsumeQuota'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('20%-10% reward threshold')}</FormLabel>
+                    <FormControl>
+                      <Input type='number' min={0} {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name='minPreviousDayRequests'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
-                      {t('Minimum previous-day requests')}
-                    </FormLabel>
+                    <FormLabel>{t('Minimum previous-day requests')}</FormLabel>
                     <FormControl>
                       <Input
                         type='number'

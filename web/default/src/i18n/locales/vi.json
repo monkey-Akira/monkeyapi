@@ -4527,6 +4527,13 @@
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Các mô hình đã chọn dùng chung khoảng thời gian, tổng số yêu cầu, số yêu cầu thành công và quy tắc nhóm được cấu hình ở trên.",
     "Invalid model rate limit scope configuration": "Cấu hình phạm vi giới hạn mô hình không hợp lệ",
     "Model scope": "Phạm vi mô hình",
-    "Remove {{model}}": "Xóa {{model}}"
+    "Remove {{model}}": "Xóa {{model}}",
+    "Leave empty to use the quota as the name": "Để trống để dùng hạn mức làm tên",
+    "Redemption codes created successfully. Download them as a text file?": "Đã tạo mã đổi thưởng thành công. Tải tất cả mã xuống dưới dạng tệp văn bản?",
+    "Last 10% reward threshold": "Ngưỡng thưởng 10% cuối",
+    "20%-10% reward threshold": "Ngưỡng thưởng 20%-10%",
+    "Yesterday consumption quota required to enter the last 10% reward range": "Hạn mức tiêu thụ hôm qua cần có để vào khoảng thưởng 10% cuối",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "Hạn mức tiêu thụ hôm qua cần có để vào khoảng thưởng 20%-10%. Đặt 0 để tắt bậc này.",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "Ngưỡng 10% cuối phải lớn hơn ngưỡng 20%-10%."
   }
 }

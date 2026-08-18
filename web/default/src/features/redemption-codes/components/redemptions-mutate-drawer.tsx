@@ -43,6 +43,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DateTimePicker } from '@/components/datetime-picker'
 import {
   SideDrawerSection,
@@ -69,6 +70,11 @@ type RedemptionsMutateDrawerProps = {
   currentRow?: Redemption
 }
 
+type GeneratedRedemptionDownload = {
+  name: string
+  codes: string[]
+}
+
 export function RedemptionsMutateDrawer({
   open,
   onOpenChange,
@@ -78,11 +84,31 @@ export function RedemptionsMutateDrawer({
   const isUpdate = !!currentRow
   const { triggerRefresh } = useRedemptions()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [download, setDownload] = useState<GeneratedRedemptionDownload | null>(
+    null
+  )
 
   const form = useForm<RedemptionFormValues>({
-    resolver: zodResolver(getRedemptionFormSchema(t)),
+    resolver: zodResolver(getRedemptionFormSchema(t, isUpdate)),
     defaultValues: REDEMPTION_FORM_DEFAULT_VALUES,
   })
+
+  const handleDownload = () => {
+    if (!download) return
+
+    const blob = new Blob([`${download.codes.join('\n')}\n`], {
+      type: 'text/plain;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${download.name}.txt`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setDownload(null)
+  }
 
   // Load existing data when updating
   useEffect(() => {
@@ -126,6 +152,9 @@ export function RedemptionsMutateDrawer({
                 })
               : t(SUCCESS_MESSAGES.REDEMPTION_CREATED)
           )
+          if (result.data?.length) {
+            setDownload({ name: basePayload.name, codes: result.data })
+          }
           onOpenChange(false)
           triggerRefresh()
         }
@@ -191,7 +220,9 @@ export function RedemptionsMutateDrawer({
                       <Input {...field} placeholder={t('Enter a name')} />
                     </FormControl>
                     <FormDescription>
-                      {t('Name for this redemption code (1-20 characters)')}
+                      {isUpdate
+                        ? t('Name for this redemption code (1-20 characters)')
+                        : t('Leave empty to use the quota as the name')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -323,6 +354,17 @@ export function RedemptionsMutateDrawer({
           </Button>
         </SheetFooter>
       </SheetContent>
+      <ConfirmDialog
+        open={download !== null}
+        onOpenChange={(open) => !open && setDownload(null)}
+        title={t(SUCCESS_MESSAGES.REDEMPTION_CREATED)}
+        desc={t(
+          'Redemption codes created successfully. Download them as a text file?'
+        )}
+        cancelBtnText={t('Cancel')}
+        confirmText={t('Download')}
+        handleConfirm={handleDownload}
+      />
     </Sheet>
   )
 }

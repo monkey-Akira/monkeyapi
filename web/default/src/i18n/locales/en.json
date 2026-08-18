@@ -4559,6 +4559,13 @@
     "Select at least one model when limiting selected models.": "Select at least one model when limiting selected models.",
     "Selected models share the period, total request limit, successful request limit, and group overrides configured above.": "Selected models share the period, total request limit, successful request limit, and group overrides configured above.",
     "Invalid model rate limit scope configuration": "Invalid model rate limit scope configuration",
-    "Model scope": "Model scope"
+    "Model scope": "Model scope",
+    "Leave empty to use the quota as the name": "Leave empty to use the quota as the name",
+    "Redemption codes created successfully. Download them as a text file?": "Redemption codes created successfully. Download them as a text file?",
+    "Last 10% reward threshold": "Last 10% reward threshold",
+    "20%-10% reward threshold": "20%-10% reward threshold",
+    "Yesterday consumption quota required to enter the last 10% reward range": "Yesterday consumption quota required to enter the last 10% reward range",
+    "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.": "Yesterday consumption quota required to enter the 20%-10% reward range. Set 0 to disable this tier.",
+    "The last 10% threshold must be greater than the 20%-10% threshold.": "The last 10% threshold must be greater than the 20%-10% threshold."
   }
 }

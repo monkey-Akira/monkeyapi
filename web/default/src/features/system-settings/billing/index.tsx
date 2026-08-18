@@ -115,6 +115,8 @@ const defaultBillingSettings: BillingSettings = {
   'checkin_setting.max_quota': 10000,
   'checkin_setting.min_previous_day_requests': 0,
   'checkin_setting.min_single_redemption_quota': 0,
+  'checkin_setting.last_10_percent_consume_quota': 0,
+  'checkin_setting.twenty_to_ten_percent_consume_quota': 0,
 }
 
 export function BillingSettings() {
