@@ -77,7 +77,7 @@ func GetPreviousDayConsumeQuota(userId int) (int64, error) {
 
 func HasUserRedeemedSingleQuotaAtLeast(userId int, minQuota int) (bool, error) {
 	var count int64
-	err := DB.Model(&Redemption{}).
+	err := DB.Unscoped().Model(&Redemption{}).
 		Where("used_user_id = ? AND status = ? AND quota >= ?", userId, common.RedemptionCodeStatusUsed, minQuota).
 		Count(&count).Error
 	return count > 0, err
