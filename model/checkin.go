@@ -83,6 +83,68 @@ func HasUserRedeemedSingleQuotaAtLeast(userId int, minQuota int) (bool, error) {
 	return count > 0, err
 }
 
+type checkinRewardRange struct {
+	min    int
+	max    int
+	weight int
+}
+
+func randomCheckinQuota(minQuota, maxQuota int) int {
+	if maxQuota <= minQuota {
+		return minQuota
+	}
+	return minQuota + rand.Intn(maxQuota-minQuota+1)
+}
+
+// Select a weighted reward while keeping every result inside the already-capped range.
+func weightedCheckinQuota(minQuota, maxQuota int) int {
+	if maxQuota <= minQuota {
+		return minQuota
+	}
+
+	lowRangeEnd := maxQuota * 6 / 10
+	highRangeStart := (maxQuota*9 + 9) / 10
+	ranges := make([]checkinRewardRange, 0, 3)
+	addRange := func(rangeMin, rangeMax, weight int) {
+		if rangeMin < minQuota {
+			rangeMin = minQuota
+		}
+		if rangeMax > maxQuota {
+			rangeMax = maxQuota
+		}
+		if rangeMin <= rangeMax {
+			ranges = append(ranges, checkinRewardRange{
+				min:    rangeMin,
+				max:    rangeMax,
+				weight: weight,
+			})
+		}
+	}
+
+	// The three ranges are [5, 30), [30, 45), and [45, max] when max is 50.
+	addRange(minQuota, lowRangeEnd-1, 85)
+	addRange(lowRangeEnd, highRangeStart-1, 14)
+	addRange(highRangeStart, maxQuota, 1)
+
+	totalWeight := 0
+	for _, rewardRange := range ranges {
+		totalWeight += rewardRange.weight
+	}
+	if totalWeight == 0 {
+		return randomCheckinQuota(minQuota, maxQuota)
+	}
+
+	roll := rand.Intn(totalWeight)
+	for _, rewardRange := range ranges {
+		if roll < rewardRange.weight {
+			return randomCheckinQuota(rewardRange.min, rewardRange.max)
+		}
+		roll -= rewardRange.weight
+	}
+
+	return ranges[len(ranges)-1].max
+}
+
 func UserCheckin(userId int) (*Checkin, error) {
 	setting := operation_setting.GetCheckinSetting()
 	if !setting.Enabled {
@@ -135,31 +197,59 @@ func UserCheckin(userId int) (*Checkin, error) {
 		return nil, errors.New("未达到签到要求")
 	}
 	last10PercentConsumeQuota := operation_setting.GetLast10PercentConsumeQuota()
+	tierMatched := false
 	if setting.MaxQuota > 0 && last10PercentConsumeQuota > 0 &&
 		previousDayQuota >= int64(last10PercentConsumeQuota) {
-		highRangeMin := (setting.MaxQuota*9 + 9) / 10
-		if highRangeMin > minQuota {
-			minQuota = highRangeMin
+		tierMin := (setting.MaxQuota*9 + 9) / 10
+		if tierMin < minQuota {
+			tierMin = minQuota
 		}
-		maxQuota = setting.MaxQuota
+		tierMax := maxQuota
+		if tierMax > setting.MaxQuota {
+			tierMax = setting.MaxQuota
+		}
+		if tierMax >= tierMin {
+			minQuota = tierMin
+			maxQuota = tierMax
+			tierMatched = true
+		}
 	} else if setting.MaxQuota > 0 &&
 		setting.TwentyToTenPercentConsumeQuota > 0 &&
 		setting.TwentyToTenPercentConsumeQuota < last10PercentConsumeQuota &&
 		previousDayQuota >= int64(setting.TwentyToTenPercentConsumeQuota) {
-		midRangeMin := (setting.MaxQuota*8 + 9) / 10
-		midRangeMax := (setting.MaxQuota*9+9)/10 - 1
-		if midRangeMin < minQuota {
-			midRangeMin = minQuota
+		tierMin := (setting.MaxQuota*8 + 9) / 10
+		if tierMin < minQuota {
+			tierMin = minQuota
 		}
-		if midRangeMax >= midRangeMin {
-			minQuota = midRangeMin
-			maxQuota = midRangeMax
+		tierMax := (setting.MaxQuota*9+9)/10 - 1
+		if tierMax > maxQuota {
+			tierMax = maxQuota
+		}
+		if tierMax >= tierMin {
+			minQuota = tierMin
+			maxQuota = tierMax
+			tierMatched = true
 		}
 	}
 
 	quotaAwarded := minQuota
-	if maxQuota > minQuota {
-		quotaAwarded = minQuota + rand.Intn(maxQuota-minQuota+1)
+	if tierMatched {
+		quotaAwarded = randomCheckinQuota(minQuota, maxQuota)
+	} else {
+		// Below twice the maximum reward, keep ordinary rewards within 60% of the maximum.
+		fullRangeThreshold := int64(setting.MaxQuota) * 2
+		if previousDayQuota < fullRangeThreshold {
+			lowRewardMax := setting.MaxQuota * 6 / 10
+			if lowRewardMax < maxQuota {
+				maxQuota = lowRewardMax
+			}
+			if maxQuota < minQuota {
+				return nil, errors.New("未达到签到要求")
+			}
+			quotaAwarded = randomCheckinQuota(minQuota, maxQuota)
+		} else {
+			quotaAwarded = weightedCheckinQuota(minQuota, maxQuota)
+		}
 	}
 
 	today := time.Now().Format("2006-01-02")
