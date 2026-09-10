@@ -1,5 +1,7 @@
 package dto
 
+import "strings"
+
 type ChannelSettings struct {
 	ForceFormat            bool   `json:"force_format,omitempty"`
 	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
@@ -24,6 +26,9 @@ const (
 )
 
 type ChannelOtherSettings struct {
+	// InputTokensExcludeCacheModels lists models whose upstream input_tokens
+	// already excludes cached input tokens.
+	InputTokensExcludeCacheModels         []string      `json:"input_tokens_exclude_cache_models,omitempty"`
 	AzureResponsesVersion                 string        `json:"azure_responses_version,omitempty"`
 	VertexKeyType                         VertexKeyType `json:"vertex_key_type,omitempty"` // "json" or "api_key"
 	OpenRouterEnterprise                  *bool         `json:"openrouter_enterprise,omitempty"`
@@ -41,6 +46,19 @@ type ChannelOtherSettings struct {
 	UpstreamModelUpdateLastDetectedModels []string      `json:"upstream_model_update_last_detected_models,omitempty"` // 上次检测到的可加入模型
 	UpstreamModelUpdateLastRemovedModels  []string      `json:"upstream_model_update_last_removed_models,omitempty"`  // 上次检测到的可删除模型
 	UpstreamModelUpdateIgnoredModels      []string      `json:"upstream_model_update_ignored_models,omitempty"`       // 手动忽略的模型
+}
+
+func (s ChannelOtherSettings) IsInputTokensExcludeCacheModel(modelName string) bool {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return false
+	}
+	for _, configuredModel := range s.InputTokensExcludeCacheModels {
+		if strings.TrimSpace(configuredModel) == modelName {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

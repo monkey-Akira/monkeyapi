@@ -228,9 +228,12 @@ function buildBillingProcess(props: {
       : cacheCreationTokens
     const isClaudeSemantic =
       other.claude === true || other.usage_semantic === 'anthropic'
+    const inputTokensExcludeCache = other.input_tokens_include_cache === false
     const textInputTokens = isClaudeSemantic
       ? log.prompt_tokens || 0
-      : Math.max(
+      : inputTokensExcludeCache
+        ? log.prompt_tokens || 0
+        : Math.max(
           (log.prompt_tokens || 0) -
             cacheTokens -
             cacheCreationBaseTokens -
@@ -238,8 +241,8 @@ function buildBillingProcess(props: {
             cacheCreationTokens1h -
             imageTokens -
             audioInputTokens,
-          0
-        )
+            0
+          )
 
     addTokenSegment(t('Input'), textInputTokens, inputUnitPrice)
     addTokenSegment(t('Cache Read'), cacheTokens, inputUnitPrice * cacheRatio)

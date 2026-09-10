@@ -18,7 +18,7 @@ type TieredResultWrapper = billingexpr.TieredResult
 // include all sub-categories (cache, image, audio). Claude-format APIs
 // report them as text-only. This function normalizes to text-only when
 // sub-categories are separately priced.
-func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVars map[string]bool) billingexpr.TokenParams {
+func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVars map[string]bool, inputTokensExcludeCache ...bool) billingexpr.TokenParams {
 	p := float64(usage.PromptTokens)
 	c := float64(usage.CompletionTokens)
 	cr := float64(usage.PromptTokensDetails.CachedTokens)
@@ -38,20 +38,37 @@ func BuildTieredTokenParams(usage *dto.Usage, isClaudeUsageSemantic bool, usedVa
 	// len = total input context length for tier condition evaluation.
 	// Non-Claude: prompt_tokens already includes everything.
 	// Claude: input_tokens is text-only, so add cache read + cache creation.
+	excludeCache := len(inputTokensExcludeCache) > 0 && inputTokensExcludeCache[0]
 	inputLen := p
 	if isClaudeUsageSemantic {
+		inputLen = p + cr + cc5m + cc1h
+	} else if excludeCache {
 		inputLen = p + cr + cc5m + cc1h
 	}
 
 	if !isClaudeUsageSemantic {
-		if usedVars["cr"] {
-			p -= cr
-		}
-		if usedVars["cc"] {
-			p -= cc5m
-		}
-		if usedVars["cc1h"] {
-			p -= cc1h
+		if excludeCache {
+			// This upstream reports p without cache tokens. Add cache tokens back
+			// when the expression does not price them separately.
+			if !usedVars["cr"] {
+				p += cr
+			}
+			if !usedVars["cc"] {
+				p += cc5m
+			}
+			if !usedVars["cc1h"] {
+				p += cc1h
+			}
+		} else {
+			if usedVars["cr"] {
+				p -= cr
+			}
+			if usedVars["cc"] {
+				p -= cc5m
+			}
+			if usedVars["cc1h"] {
+				p -= cc1h
+			}
 		}
 		if usedVars["img"] {
 			p -= img

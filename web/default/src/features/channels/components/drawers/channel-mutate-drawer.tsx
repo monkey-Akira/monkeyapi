@@ -215,7 +215,8 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
     values.upstream_model_update_auto_sync_enabled ||
-    values.upstream_model_update_ignored_models?.trim()
+    values.upstream_model_update_ignored_models?.trim() ||
+    values.input_tokens_exclude_cache_models?.trim()
   )
 }
 
@@ -3174,6 +3175,30 @@ export function ChannelMutateDrawer({
                             </FormControl>
                             <FormDescription>
                               {t('Default system prompt for this channel')}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='input_tokens_exclude_cache_models'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t('Models whose input tokens exclude cache')}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder={t('model-a,model-b')}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Comma-separated model names. These models are billed without subtracting cached input tokens.'
+                              )}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
