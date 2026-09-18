@@ -18,21 +18,26 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
+import { ChannelsDialogs } from './components/channels-dialogs'
+import { ChannelsPrimaryButtons } from './components/channels-primary-buttons'
+import { ChannelsProvider } from './components/channels-provider'
+import { ChannelsTable } from './components/channels-table'
 
 export function Channels() {
   const { t } = useTranslation()
   return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Channels')}</SectionPageLayout.Title>
-      <SectionPageLayout.Content>
-        <iframe
-          src='/legacy/channel'
-          title={t('Channels')}
-          className='h-[calc(100svh-9rem)] min-h-[720px] w-full border-0 bg-white'
-          referrerPolicy='same-origin'
-          allow='clipboard-read; clipboard-write'
-        />
-      </SectionPageLayout.Content>
-    </SectionPageLayout>
+    <ChannelsProvider>
+      <SectionPageLayout>
+        <SectionPageLayout.Title>{t('Channels')}</SectionPageLayout.Title>
+        <SectionPageLayout.Actions>
+          <ChannelsPrimaryButtons />
+        </SectionPageLayout.Actions>
+        <SectionPageLayout.Content>
+          <ChannelsTable />
+        </SectionPageLayout.Content>
+      </SectionPageLayout>
+
+      <ChannelsDialogs />
+    </ChannelsProvider>
   )
 }
