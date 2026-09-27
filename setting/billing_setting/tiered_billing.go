@@ -2,6 +2,7 @@ package billing_setting
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -9,22 +10,25 @@ import (
 )
 
 const (
-	BillingModeRatio      = "ratio"
-	BillingModeTieredExpr = "tiered_expr"
-	BillingModeField      = "billing_mode"
-	BillingExprField      = "billing_expr"
+	BillingModeRatio        = "ratio"
+	BillingModeTieredExpr   = "tiered_expr"
+	BillingModeField        = "billing_mode"
+	BillingExprField        = "billing_expr"
+	PluginBillingExprOption = "billing_setting.plugin_billing_expr"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
 // DB keys: billing_setting.billing_mode, billing_setting.billing_expr
 type BillingSetting struct {
-	BillingMode map[string]string `json:"billing_mode"`
-	BillingExpr map[string]string `json:"billing_expr"`
+	BillingMode       map[string]string `json:"billing_mode"`
+	BillingExpr       map[string]string `json:"billing_expr"`
+	PluginBillingExpr map[string]string `json:"plugin_billing_expr"`
 }
 
 var billingSetting = BillingSetting{
-	BillingMode: make(map[string]string),
-	BillingExpr: make(map[string]string),
+	BillingMode:       make(map[string]string),
+	BillingExpr:       make(map[string]string),
+	PluginBillingExpr: make(map[string]string),
 }
 
 func init() {
@@ -47,6 +51,21 @@ func GetBillingExpr(model string) (string, bool) {
 	return expr, ok
 }
 
+func PluginBillingExprKey(pluginKey, model string) string {
+	return pluginKey + "::" + model
+}
+
+func SplitPluginBillingExprKey(key string) (plugin, model string, ok bool) {
+	plugin, model, ok = strings.Cut(key, "::")
+	if !ok || strings.TrimSpace(plugin) == "" || strings.TrimSpace(model) == "" {
+		return "", "", false
+	}
+	return plugin, model, true
+}
+
+func GetPluginBillingExprCopy() map[string]string {
+	return lo.Assign(billingSetting.PluginBillingExpr)
+}
 func GetBillingModeCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingMode)
 }

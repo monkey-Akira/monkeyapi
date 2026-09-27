@@ -16,35 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+
+import { Dialog } from '@/components/dialog'
+import { GroupBadge } from '@/components/group-badge'
+import { JsonCodeEditor } from '@/components/json-code-editor'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
-import { GroupBadge } from '@/components/group-badge'
-import { StatusBadge } from '@/components/status-badge'
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
+
 import {
   editTagChannels,
   getTagModels,
@@ -76,21 +66,24 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
   // Fetch tag models
   const { data: tagModelsData, isLoading: isLoadingTagModels } = useQuery({
     queryKey: ['tag-models', currentTag],
-    queryFn: () => (currentTag ? getTagModels(currentTag) : null),
+    queryFn: async () =>
+      requireServerSuccess(
+        await (currentTag ? getTagModels(currentTag) : null)
+      ),
     enabled: open && !!currentTag,
   })
 
   // Fetch all available models
   const { data: allModelsData } = useQuery({
     queryKey: ['all-models'],
-    queryFn: getAllModels,
+    queryFn: async () => requireServerSuccess(await getAllModels()),
     enabled: open,
   })
 
   // Fetch groups
   const { data: groupsData } = useQuery({
     queryKey: ['groups'],
-    queryFn: getGroups,
+    queryFn: async () => requireServerSuccess(await getGroups()),
     enabled: open,
   })
 
@@ -204,12 +197,10 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
         queryClient.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
         onOpenChange(false)
       } else {
-        toast.error(response.message || t('Failed to update tag'))
+        handleServerError(response, t('Failed to update tag'))
       }
     } catch (error: unknown) {
-      toast.error(
-        error instanceof Error ? error.message : t('Failed to update tag')
-      )
+      handleServerError(error, t('Failed to update tag'))
     } finally {
       setIsSubmitting(false)
     }
@@ -222,216 +213,23 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
   if (!currentTag) return null
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className='max-h-[90vh] max-w-2xl'>
-        <DialogHeader>
-          <DialogTitle>
-            {t('Edit Tag:')} {currentTag}
-          </DialogTitle>
-          <DialogDescription>
-            {t(
-              'Batch edit all channels with this tag. Leave fields empty to keep current values.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <ScrollArea className='max-h-[60vh] pr-4'>
-          <div className='space-y-6'>
-            {/* Tag Name */}
-            <div className='space-y-2'>
-              <Label htmlFor='new-tag'>
-                {t('Tag Name')}
-                <span className='text-muted-foreground ml-2 text-xs'>
-                  {t('(Leave empty to dissolve tag)')}
-                </span>
-              </Label>
-              <Input
-                id='new-tag'
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                placeholder={t('Enter new tag name or leave empty')}
-              />
-            </div>
-
-            <Separator />
-
-            {/* Models */}
-            <div className='space-y-2'>
-              <Label>
-                {t('Models')}
-                <span className='text-muted-foreground ml-2 text-xs'>
-                  {t("(Override all channels' models)")}
-                </span>
-              </Label>
-
-              {isLoadingTagModels ? (
-                <div className='flex items-center gap-2 py-4'>
-                  <Loader2 className='h-4 w-4 animate-spin' />
-                  <span className='text-muted-foreground text-sm'>
-                    {t('Loading current models...')}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <div className='flex min-h-[60px] flex-wrap gap-2 rounded-md border p-3'>
-                    {selectedModels.length > 0 ? (
-                      selectedModels.map((model) => (
-                        <StatusBadge
-                          key={model}
-                          variant='neutral'
-                          className='cursor-pointer transition-opacity hover:opacity-70'
-                          copyable={false}
-                          onClick={() => handleRemoveModel(model)}
-                        >
-                          {model} ×
-                        </StatusBadge>
-                      ))
-                    ) : (
-                      <span className='text-muted-foreground text-sm'>
-                        {t('No models selected')}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className='flex gap-2'>
-                    <Select<string>
-                      items={[
-                        ...availableModels.map((model) => ({
-                          value: model,
-                          label: model,
-                        })),
-                      ]}
-                      onValueChange={(value) => {
-                        if (value === null) return
-                        if (!selectedModels.includes(value)) {
-                          setSelectedModels([...selectedModels, value])
-                        }
-                      }}
-                    >
-                      <SelectTrigger className='flex-1'>
-                        <SelectValue
-                          placeholder={t('Add from available models...')}
-                        />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          <ScrollArea className='h-60'>
-                            {availableModels.map((model) => (
-                              <SelectItem key={model} value={model}>
-                                {model}
-                              </SelectItem>
-                            ))}
-                          </ScrollArea>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className='flex gap-2'>
-                    <Input
-                      placeholder={t('Custom model (comma-separated)')}
-                      value={customModel}
-                      onChange={(e) => setCustomModel(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          handleAddCustomModel()
-                        }
-                      }}
-                    />
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      onClick={handleAddCustomModel}
-                    >
-                      {t('Add')}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Model Mapping */}
-            <div className='space-y-2'>
-              <Label htmlFor='model-mapping'>
-                {t('Model Mapping (JSON)')}
-                <span className='text-muted-foreground ml-2 text-xs'>
-                  {t('(Optional: redirect model names)')}
-                </span>
-              </Label>
-              <Textarea
-                id='model-mapping'
-                value={modelMapping}
-                onChange={(e) => setModelMapping(e.target.value)}
-                placeholder={'{\n  "gpt-3.5-turbo": "gpt-3.5-turbo-0125"\n}'}
-                rows={4}
-                className='font-mono text-sm'
-              />
-              <div className='flex gap-2'>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  onClick={() =>
-                    setModelMapping(
-                      JSON.stringify(
-                        { 'gpt-3.5-turbo': 'gpt-3.5-turbo-0125' },
-                        null,
-                        2
-                      )
-                    )
-                  }
-                >
-                  {t('Example')}
-                </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  onClick={() => setModelMapping(JSON.stringify({}, null, 2))}
-                >
-                  {t('Clear Mapping')}
-                </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  onClick={() => setModelMapping('')}
-                >
-                  {t('No Change')}
-                </Button>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Groups */}
-            <div className='space-y-2'>
-              <Label>
-                {t('Groups')}
-                <span className='text-muted-foreground ml-2 text-xs'>
-                  {t("(Override all channels' groups)")}
-                </span>
-              </Label>
-              <div className='flex min-h-[60px] flex-wrap gap-2 rounded-md border p-3'>
-                {availableGroups.map((group) => (
-                  <GroupBadge
-                    key={group}
-                    group={group}
-                    className={`cursor-pointer rounded-sm transition-opacity hover:opacity-70 ${
-                      selectedGroups.includes(group) ? 'bg-muted/70 px-1' : ''
-                    }`}
-                    onClick={() => handleToggleGroup(group)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </ScrollArea>
-
-        <DialogFooter>
+    <Dialog
+      open={open}
+      onOpenChange={handleClose}
+      title={
+        <>
+          {t('Edit Tag:')}
+          {currentTag}
+        </>
+      }
+      description={t(
+        'Batch edit all channels with this tag. Leave fields empty to keep current values.'
+      )}
+      contentClassName='max-h-[min(90dvh,var(--dialog-available-height))] max-w-2xl'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+      footer={
+        <>
           <Button variant='outline' onClick={handleClose}>
             {t('Cancel')}
           </Button>
@@ -439,8 +237,186 @@ export function EditTagDialog({ open, onOpenChange }: EditTagDialogProps) {
             {isSubmitting && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {t('Save Changes')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </>
+      }
+    >
+      <ScrollArea className='max-h-[60vh] pr-4'>
+        <div className='space-y-6'>
+          {/* Tag Name */}
+          <div className='space-y-2'>
+            <Label htmlFor='new-tag'>
+              {t('Tag Name')}
+              <span className='text-muted-foreground ml-2 text-xs'>
+                {t('(Leave empty to dissolve tag)')}
+              </span>
+            </Label>
+            <Input
+              id='new-tag'
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder={t('Enter new tag name or leave empty')}
+            />
+          </div>
+
+          <Separator />
+
+          {/* Models */}
+          <div className='space-y-2'>
+            <Label>
+              {t('Models')}
+              <span className='text-muted-foreground ml-2 text-xs'>
+                {t("(Override all channels' models)")}
+              </span>
+            </Label>
+
+            {isLoadingTagModels ? (
+              <div className='flex items-center gap-2 py-4'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                <span className='text-muted-foreground text-sm'>
+                  {t('Loading current models...')}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className='flex min-h-[60px] flex-wrap gap-2 rounded-md border p-3'>
+                  {selectedModels.length > 0 ? (
+                    selectedModels.map((model) => (
+                      <StatusBadge
+                        key={model}
+                        variant='neutral'
+                        className='cursor-pointer transition-opacity hover:opacity-70'
+                        copyable={false}
+                        onClick={() => handleRemoveModel(model)}
+                      >
+                        {model} ×
+                      </StatusBadge>
+                    ))
+                  ) : (
+                    <span className='text-muted-foreground text-sm'>
+                      {t('No models selected')}
+                    </span>
+                  )}
+                </div>
+
+                <div className='flex gap-2'>
+                  <Combobox
+                    options={availableModels.map((model) => ({
+                      value: model,
+                      label: model,
+                    }))}
+                    onValueChange={(value: string | null) => {
+                      if (value !== null && !selectedModels.includes(value)) {
+                        setSelectedModels([...selectedModels, value])
+                      }
+                    }}
+                    className='flex-1'
+                    placeholder={t('Add from available models...')}
+                    aria-label={t('Add from available models...')}
+                  />
+                </div>
+
+                <div className='flex gap-2'>
+                  <Input
+                    placeholder={t('Custom model (comma-separated)')}
+                    value={customModel}
+                    onChange={(e) => setCustomModel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddCustomModel()
+                      }
+                    }}
+                  />
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={handleAddCustomModel}
+                  >
+                    {t('Add')}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Model Mapping */}
+          <div className='space-y-2'>
+            <Label htmlFor='model-mapping'>
+              {t('Model Mapping (JSON)')}
+              <span className='text-muted-foreground ml-2 text-xs'>
+                {t('(Optional: redirect model names)')}
+              </span>
+            </Label>
+            <JsonCodeEditor
+              id='model-mapping'
+              value={modelMapping}
+              onChange={setModelMapping}
+              placeholder={'{\n  "gpt-3.5-turbo": "gpt-3.5-turbo-0125"\n}'}
+              heightClassName='h-40 min-h-40 max-h-40'
+            />
+            <div className='flex gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() =>
+                  setModelMapping(
+                    JSON.stringify(
+                      { 'gpt-3.5-turbo': 'gpt-3.5-turbo-0125' },
+                      null,
+                      2
+                    )
+                  )
+                }
+              >
+                {t('Example')}
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => setModelMapping(JSON.stringify({}, null, 2))}
+              >
+                {t('Clear Mapping')}
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => setModelMapping('')}
+              >
+                {t('No Change')}
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Groups */}
+          <div className='space-y-2'>
+            <Label>
+              {t('Groups')}
+              <span className='text-muted-foreground ml-2 text-xs'>
+                {t("(Override all channels' groups)")}
+              </span>
+            </Label>
+            <div className='flex min-h-[60px] flex-wrap gap-2 rounded-md border p-3'>
+              {availableGroups.map((group) => (
+                <GroupBadge
+                  key={group}
+                  group={group}
+                  className={`cursor-pointer rounded-sm transition-opacity hover:opacity-70 ${
+                    selectedGroups.includes(group) ? 'bg-muted/70 px-1' : ''
+                  }`}
+                  onClick={() => handleToggleGroup(group)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
     </Dialog>
   )
 }

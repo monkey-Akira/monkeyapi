@@ -16,14 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api, type ApiRequestConfig } from '@/lib/api'
 import { getGroups as getUserGroups } from '@/features/users/api'
+import { api, type ApiRequestConfig } from '@/lib/api'
+import { requireServerSuccess } from '@/lib/server-error-message'
+
+import type { InferenceStatus } from './lib/inference-status'
 import type {
   AddChannelRequest,
   BatchDeleteParams,
   BatchSetTagParams,
   Channel,
   ChannelBalanceResponse,
+  ChannelOpsResponse,
   ChannelTestResponse,
   CopyChannelParams,
   CopyChannelResponse,
@@ -46,24 +50,38 @@ const channelActionConfig = (
   skipErrorHandler: true,
 })
 
-export type CodexOAuthStartResponse = {
-  success: boolean
-  message?: string
-  data?: {
-    authorize_url?: string
-  }
+export async function getInferenceStatus(
+  channelId: number,
+  provider: 'vllm' | 'sglang',
+  signal?: AbortSignal
+): Promise<InferenceStatus> {
+  const response = await api.get<{ success: boolean; data: InferenceStatus }>(
+    `/api/channel/${channelId}/${provider}/status`,
+    { signal, disableDuplicate: true }
+  )
+  return requireServerSuccess(response.data).data
 }
 
-export type CodexOAuthCompleteResponse = {
-  success: boolean
-  message?: string
-  data?: {
-    key?: string
-    account_id?: string
-    email?: string
-    expires_at?: string
-    last_refresh?: string
-  }
+export type TaskPluginOption = {
+  sortPriority?: number
+  website?: string
+  key: string
+  name: string
+  description?: Record<string, string> | null
+  icon?: string
+  hasIcon?: boolean
+  baseUrl?: string
+  models: string[]
+  channelTypes?: number[] | null
+  upstreams?: string[] | null
+}
+
+export async function getTaskPluginOptions(): Promise<TaskPluginOption[]> {
+  const response = await api.get<{
+    success: boolean
+    data: TaskPluginOption[]
+  }>('/api/task_plugin_options')
+  return requireServerSuccess(response.data).data
 }
 
 export type CodexUsageResponse = {
@@ -72,6 +90,10 @@ export type CodexUsageResponse = {
   upstream_status?: number
   data?: Record<string, unknown>
 }
+
+export type CodexResetCreditsResponse = CodexUsageResponse
+
+export type CodexUsageResetResponse = CodexUsageResponse
 
 export type CodexCredentialRefreshResponse = {
   success: boolean
@@ -120,6 +142,29 @@ export async function getChannel(id: number): Promise<GetChannelResponse> {
 }
 
 /**
+ * Get channel operations summary for administrators
+ */
+export async function getChannelOps(
+  autoBan?: boolean
+): Promise<ChannelOpsResponse> {
+  const res = await api.get('/api/channel/ops', {
+    ...channelActionConfig(),
+    params: autoBan === undefined ? undefined : { auto_ban: autoBan },
+  })
+  return res.data
+}
+
+export async function getChannelDefaultBaseURLs(): Promise<
+  Partial<Record<number, string>>
+> {
+  const response = await api.get<{
+    success: boolean
+    data: Partial<Record<number, string>>
+  }>('/api/channel/default_base_urls')
+  return requireServerSuccess(response.data).data
+}
+
+/**
  * Create new channel(s)
  * Supports single, batch, and multi-key modes
  */
@@ -140,6 +185,36 @@ export async function updateChannel(
   const res = await api.put(
     '/api/channel/',
     { id, ...data },
+    channelActionConfig()
+  )
+  return res.data
+}
+
+/**
+ * Update channel enabled/disabled status.
+ */
+export async function updateChannelStatus(
+  id: number,
+  status: number
+): Promise<{ success: boolean; message?: string; data?: boolean }> {
+  const res = await api.post(
+    `/api/channel/${id}/status`,
+    { status },
+    channelActionConfig()
+  )
+  return res.data
+}
+
+/**
+ * Batch update channel enabled/disabled status.
+ */
+export async function batchUpdateChannelStatus(
+  ids: number[],
+  status: number
+): Promise<{ success: boolean; message?: string; data?: number }> {
+  const res = await api.post(
+    '/api/channel/status/batch',
+    { ids, status },
     channelActionConfig()
   )
   return res.data
@@ -266,29 +341,28 @@ export async function deleteDisabledChannels(): Promise<{
   return res.data
 }
 
+/**
+ * Get channel key (requires 2FA verification)
+ */
+export async function getChannelKey(
+  id: number,
+  proofToken: string,
+  signal?: AbortSignal
+): Promise<{ success: boolean; message?: string; data?: { key: string } }> {
+  const res = await api.post(
+    `/api/channel/${id}/key`,
+    undefined,
+    channelActionConfig({
+      headers: { 'X-Security-Proof': proofToken },
+      signal,
+    })
+  )
+  return res.data
+}
+
 // ============================================================================
 // Codex Channel Operations
 // ============================================================================
-
-export async function startCodexOAuth(): Promise<CodexOAuthStartResponse> {
-  const res = await api.post(
-    '/api/channel/codex/oauth/start',
-    {},
-    channelActionConfig()
-  )
-  return res.data
-}
-
-export async function completeCodexOAuth(
-  input: string
-): Promise<CodexOAuthCompleteResponse> {
-  const res = await api.post(
-    '/api/channel/codex/oauth/complete',
-    { input },
-    channelActionConfig()
-  )
-  return res.data
-}
 
 export async function refreshCodexCredential(
   channelId: number
@@ -306,6 +380,27 @@ export async function getCodexUsage(
 ): Promise<CodexUsageResponse> {
   const res = await api.get(
     `/api/channel/${channelId}/codex/usage`,
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function getCodexResetCredits(
+  channelId: number
+): Promise<CodexResetCreditsResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/codex/usage/reset-credits`,
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function resetCodexUsage(
+  channelId: number
+): Promise<CodexUsageResetResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/codex/usage/reset`,
+    {},
     channelActionConfig({ disableDuplicate: true })
   )
   return res.data
@@ -482,12 +577,16 @@ export async function getTagModels(
 // ============================================================================
 
 /**
- * Fetch models from a custom endpoint (for testing before creating channel)
+ * Fetch models from the current unsaved channel form configuration.
  */
 export async function fetchModels(data: {
   base_url: string
   type: number
-  key: string
+  key?: string
+  channel_id?: number
+  advanced_custom?: string
+  header_override?: string
+  proxy?: string
 }): Promise<FetchModelsResponse> {
   const res = await api.post(
     '/api/channel/fetch_models',

@@ -27,10 +27,40 @@ export type PricingVendor = {
   description?: string
 }
 
+export type BillingUsageUnit = 'second' | 'count' | 'token' | 'credit'
+
+export type BillingUsageFieldSchema = {
+  type?: 'number' | 'boolean'
+  unit?: BillingUsageUnit
+  unitLabel?: string | Record<string, string>
+  enum?: string[]
+  enumLabels?: Record<string, string | Record<string, string>>
+  description?: string | Record<string, string>
+}
+
+export type BillingUsageSchema = Record<string, BillingUsageFieldSchema>
+
+export type BillingUsageExample = {
+  label: string
+  facts: Record<string, string | number>
+}
+
+export type BillingPluginVariant = {
+  plugin_key: string
+  plugin_name: string
+  icon?: string
+  billing_expr: string
+  billing_mode?: 'ratio' | 'tiered_expr'
+  billing_usage_schema: BillingUsageSchema
+  billing_usage_examples?: BillingUsageExample[]
+}
+
 export type PricingModel = {
+  billing_plugin_variants?: BillingPluginVariant[]
   id: number
   model_name: string
   description?: string
+  icon?: string
   vendor_id?: number
   vendor_name?: string
   vendor_icon?: string
@@ -53,13 +83,15 @@ export type PricingModel = {
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  /** Task-plugin usage facts and their billing units. */
+  billing_usage_schema?: BillingUsageSchema
+  /** Display-only labeled usage vectors for pricing examples. */
+  billing_usage_examples?: BillingUsageExample[]
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
   /**
-   * Optional model metadata fields. These are not yet returned by the backend
-   * and are populated client-side from {@link inferModelMetadata}.
-   * When the backend ships these fields, the inference layer becomes a
-   * fallback rather than the source of truth.
+   * Optional model metadata fields reserved for backend-provided catalog data.
+   * Keep them data-driven; do not synthesize display values on the client.
    */
   context_length?: number
   max_output_tokens?: number
@@ -101,11 +133,6 @@ export type PricingData = {
 }
 
 export type TokenUnit = 'M' | 'K'
-export type PriceDisplayOption = {
-  value: string
-  label: string
-  priceRate?: number
-}
 export type PriceType =
   | 'input'
   | 'output'

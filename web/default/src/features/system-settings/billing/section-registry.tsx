@@ -38,6 +38,7 @@ const getModelDefaults = (settings: BillingSettings) => ({
   ExposeRatioEnabled: settings.ExposeRatioEnabled,
   BillingMode: settings['billing_setting.billing_mode'],
   BillingExpr: settings['billing_setting.billing_expr'],
+  PluginBillingExpr: settings['billing_setting.plugin_billing_expr'],
 })
 
 const getGroupDefaults = (settings: BillingSettings) => ({
@@ -51,17 +52,6 @@ const getGroupDefaults = (settings: BillingSettings) => ({
     settings['group_ratio_setting.group_special_usable_group'],
 })
 
-function LegacyModelPricingFrame() {
-  return (
-    <iframe
-      src='/legacy/model-pricing'
-      title='Model Pricing'
-      className='h-[calc(100svh-9rem)] min-h-[720px] w-full border-0 bg-white'
-      referrerPolicy='same-origin'
-      allow='clipboard-read; clipboard-write'
-    />
-  )
-}
 
 const BILLING_SECTIONS = [
   {
@@ -135,7 +125,15 @@ const BILLING_SECTIONS = [
   {
     id: 'model-pricing',
     titleKey: 'Model Pricing',
-    build: () => <LegacyModelPricingFrame />,
+    build: (settings: BillingSettings) => (
+      <RatioSettingsCard
+        titleKey='Model Pricing'
+        modelDefaults={getModelDefaults(settings)}
+        groupDefaults={getGroupDefaults(settings)}
+        toolPricesDefault={settings['tool_price_setting.prices']}
+        visibleTabs={['models', 'unset-models', 'tool-prices', 'upstream-sync']}
+      />
+    ),
   },
   {
     id: 'group-pricing',
