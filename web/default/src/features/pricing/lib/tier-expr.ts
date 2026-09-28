@@ -262,6 +262,29 @@ export type ExtraTokenValues = Record<
   number
 >
 
+export function buildEstimatorTokens(
+  promptTokens: number,
+  completionTokens: number,
+  extraTokenValues: ExtraTokenValues
+): Record<string, number> {
+  return {
+    p: promptTokens,
+    c: completionTokens,
+    len:
+      promptTokens +
+      extraTokenValues.cacheReadTokens +
+      extraTokenValues.cacheCreateTokens +
+      extraTokenValues.cacheCreate1hTokens,
+    cr: extraTokenValues.cacheReadTokens,
+    cc: extraTokenValues.cacheCreateTokens,
+    cc1h: extraTokenValues.cacheCreate1hTokens,
+    img: extraTokenValues.imageTokens,
+    img_o: extraTokenValues.imageOutputTokens,
+    ai: extraTokenValues.audioInputTokens,
+    ao: extraTokenValues.audioOutputTokens,
+  }
+}
+
 export type EvalResult = {
   cost: number
   matchedTier: string

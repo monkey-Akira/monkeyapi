@@ -36,6 +36,20 @@ type DynamicPriceOptions = {
   groupRatioMultiplier?: number
 }
 
+export function getTaskUsageQuantityUnitLabelKey(unit?: string): string {
+  if (unit === 'second') return 's'
+  if (unit === 'token') return 'token (unit)'
+  if (unit === 'credit') return 'credit'
+  return 'unit'
+}
+
+export function getTaskUsagePriceUnitLabelKey(unit?: string): string {
+  if (unit === 'second') return 'second'
+  if (unit === 'token') return '1M token'
+  if (unit === 'credit') return 'credit'
+  return 'unit'
+}
+
 export type DynamicPriceEntry = {
   key: string
   field: string

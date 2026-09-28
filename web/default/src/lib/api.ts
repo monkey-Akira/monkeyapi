@@ -154,6 +154,10 @@ export function getCommonHeaders(): Record<string, string> {
   return headers
 }
 
+export async function getFreshAuthHeaders(): Promise<Record<string, string>> {
+  return getCommonHeaders()
+}
+
 // ============================================================================
 // Request Interceptor
 // ============================================================================

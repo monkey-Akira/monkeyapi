@@ -18,6 +18,21 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { AxiosError } from 'axios'
 
+export class AuthOperationError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'AuthOperationError'
+  }
+
+  static from(error: unknown): AuthOperationError {
+    if (error instanceof AuthOperationError) return error
+    return new AuthOperationError(
+      error instanceof Error ? error.message : 'Verification failed',
+      { cause: error }
+    )
+  }
+}
+
 export interface VerificationRequiredInfo {
   code?: string
   message: string

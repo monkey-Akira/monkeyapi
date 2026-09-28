@@ -73,10 +73,21 @@ export const textColorMap = {
 
 export type StatusVariant = keyof typeof dotColorMap
 
+export type StatusBadgeType = 'badge' | 'text' | 'underline'
+
+export const StatusBadgeTypeContext =
+  React.createContext<StatusBadgeType>('badge')
+
 const sizeMap = {
   sm: 'h-5 gap-1 px-1.5 text-xs leading-none',
   md: 'h-5 gap-1 px-1.5 text-xs leading-none',
   lg: 'h-6 gap-1.5 px-2 text-xs leading-none',
+} as const
+
+const textSizeMap = {
+  sm: 'h-5 gap-1 text-xs leading-none',
+  md: 'h-5 gap-1 text-xs leading-none',
+  lg: 'h-6 gap-1.5 text-xs leading-none',
 } as const
 
 export interface StatusBadgeProps extends Omit<
@@ -94,6 +105,7 @@ export interface StatusBadgeProps extends Omit<
   copyable?: boolean
   copyText?: string
   autoColor?: string
+  type?: StatusBadgeType
 }
 
 export function StatusBadge({
@@ -107,10 +119,13 @@ export function StatusBadge({
   copyable = true,
   copyText,
   autoColor,
+  type: typeProp,
   className,
   onClick,
   ...props
 }: StatusBadgeProps) {
+  const contextType = React.useContext(StatusBadgeTypeContext)
+  const type = typeProp ?? contextType
   const { copyToClipboard } = useCopyToClipboard()
 
   const computedVariant: StatusVariant = autoColor
@@ -132,7 +147,10 @@ export function StatusBadge({
     <span
       className={cn(
         'inline-flex w-fit max-w-full shrink-0 items-center rounded-4xl font-medium tracking-normal whitespace-nowrap transition-colors',
-        sizeMap[size ?? 'sm'],
+        type === 'badge'
+          ? sizeMap[size ?? 'sm']
+          : textSizeMap[size ?? 'sm'],
+        type === 'underline' && 'border-b border-current',
         textColorMap[computedVariant],
         pulse && 'animate-pulse',
         copyable &&

@@ -32,6 +32,10 @@ For commercial licensing, please contact support@quantumnous.com
 // Variable registry
 // ---------------------------------------------------------------------------
 
+import type { BillingUsageSchema } from '../types'
+import { compileBillingExpression } from './billing-expression/parser'
+import { readTaskTierChain } from './billing-expression/display'
+
 export type BillingVar = {
   key: string
   field: string | null
@@ -238,6 +242,31 @@ export type ParsedTier = {
   label: string
   conditions: TierCondition[]
   [field: string]: unknown
+}
+
+export type TaskTierCondition = {
+  field: string
+  value: string
+}
+
+export type ParsedTaskTier = {
+  conditionText?: string
+  label: string
+  conditions: TaskTierCondition[]
+  constant: number
+  unitPrices: Record<string, number>
+}
+
+export function parseTaskTiersFromExpr(
+  exprStr: string,
+  schema: BillingUsageSchema | null | undefined,
+  includeBooleanConditions = false
+): ParsedTaskTier[] {
+  if (!exprStr || !schema || Object.keys(schema).length === 0) return []
+  const { billingExpr } = splitBillingExprAndRequestRules(exprStr)
+  const compiled = compileBillingExpression(billingExpr)
+  if (compiled.status !== 'ready') return []
+  return readTaskTierChain(compiled.ast, schema, includeBooleanConditions) ?? []
 }
 
 // ---------------------------------------------------------------------------

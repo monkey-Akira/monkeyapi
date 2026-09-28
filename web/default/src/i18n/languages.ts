@@ -39,3 +39,12 @@ export function normalizeInterfaceLanguage(value?: string | null): string {
     ? normalized
     : 'en'
 }
+
+export function toIntlLocale(value?: string | null): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().replace(/_/g, '-').toLowerCase()
+  if (normalized === 'zhcn' || normalized === 'zh-cn') return 'zh-CN'
+  if (normalized === 'zhtw' || normalized === 'zh-tw') return 'zh-TW'
+  if (normalized === 'zhhk' || normalized === 'zh-hk') return 'zh-HK'
+  return normalized
+}
