@@ -16,9 +16,42 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { StatusBadge, type StatusBadgeProps } from './status-badge'
+import { Badge } from './ui/badge'
+
+export function GroupMultiplierBadge(props: {
+  children?: ReactNode
+  className?: string
+  label?: string
+  ratio?: number | null
+}) {
+  let colorClassName =
+    'border-muted-foreground/30 bg-muted text-muted-foreground'
+  if (props.ratio != null && props.ratio > 1) {
+    colorClassName = 'border-warning/30 bg-warning/10 text-warning'
+  } else if (props.ratio != null && props.ratio < 1) {
+    colorClassName = 'border-info/30 bg-info/10 text-info'
+  }
+
+  return (
+    <Badge
+      variant='outline'
+      className={cn(
+        'relative h-5 min-w-12 rounded-full px-1.5 py-0 text-sm leading-none font-medium shadow-none',
+        !props.label && 'tabular-nums',
+        colorClassName,
+        props.className
+      )}
+    >
+      {props.children}
+      <span>{props.label ?? `${props.ratio}x`}</span>
+    </Badge>
+  )
+}
+
 
 type GroupBadgeProps = Omit<
   StatusBadgeProps,
