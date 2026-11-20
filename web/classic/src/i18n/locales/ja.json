@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "自動無効化のしきい値（回/分）",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "直近60秒の成功回数がこの値を超えると、手動で再び有効にするまでキーが無効になります。0は無制限です。",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 画像生成APIコール {{symbol}}{{price}} / 1回 * {{ratioType}} {{ratio}}",

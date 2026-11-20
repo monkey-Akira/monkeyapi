@@ -165,7 +165,7 @@ func GetTokenUsage(c *gin.Context) {
 }
 
 func AddToken(c *gin.Context) {
-	token := model.Token{}
+	token := model.Token{MinuteSuccessLimit: 3}
 	err := c.ShouldBindJSON(&token)
 	if err != nil {
 		common.ApiError(c, err)
@@ -207,7 +207,12 @@ func AddToken(c *gin.Context) {
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
 	}
+	if token.MinuteSuccessLimit < 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
 	cleanToken := model.Token{
+		MinuteSuccessLimit: token.MinuteSuccessLimit,
 		UserId:             c.GetInt("id"),
 		Name:               token.Name,
 		Key:                key,
@@ -250,7 +255,10 @@ func DeleteToken(c *gin.Context) {
 func UpdateToken(c *gin.Context) {
 	userId := c.GetInt("id")
 	statusOnly := c.Query("status_only")
-	token := model.Token{}
+	var token struct {
+		model.Token
+		Limit *int `json:"minute_success_limit" binding:"omitempty,min=0"`
+	}
 	err := c.ShouldBindJSON(&token)
 	if err != nil {
 		common.ApiError(c, err)
@@ -288,6 +296,7 @@ func UpdateToken(c *gin.Context) {
 	}
 	if statusOnly != "" {
 		cleanToken.Status = token.Status
+		err = cleanToken.UpdateCallGuardStatus()
 	} else {
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name
@@ -299,8 +308,8 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		err = cleanToken.UpdateSettings(token.Limit)
 	}
-	err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)
 		return

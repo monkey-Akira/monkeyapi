@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "Seuil de désactivation (appels par minute)",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "Si le nombre d’appels réussis en 60 secondes dépasse ce seuil, la clé est désactivée jusqu’à sa réactivation manuelle. Saisissez 0 pour désactiver la limite.",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

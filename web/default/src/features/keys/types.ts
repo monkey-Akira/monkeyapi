@@ -24,6 +24,7 @@ import { z } from 'zod'
 
 export const apiKeySchema = z.object({
   id: z.number(),
+  minute_success_limit: z.number().int().nonnegative().optional(),
   name: z.string(),
   key: z.string(),
   status: z.number(), // 1: enabled, 2: disabled, 3: expired, 4: exhausted
@@ -83,6 +84,7 @@ export interface SearchApiKeysParams {
 }
 
 export interface ApiKeyFormData {
+  minute_success_limit: number
   name: string
   remain_quota: number
   expired_time: number

@@ -1,5 +1,9 @@
 # AGENTS.md — Project Conventions for new-api
 
+## 项目须知
+
+本项目的本地工作区没有验证环境。日常修改跳过本地构建、测试、启动服务和数据库验证，无需为验证安装依赖。交付时注明实际执行情况。
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.

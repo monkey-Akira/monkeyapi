@@ -28,6 +28,7 @@ type Token struct {
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
+	MinuteSuccessLimit int            `json:"minute_success_limit" gorm:"default:0"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -283,19 +284,29 @@ func (token *Token) Insert() error {
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
-func (token *Token) Update() (err error) {
-	defer func() {
-		if shouldUpdateRedis(true, err) {
-			gopool.Go(func() {
-				err := cacheSetToken(*token)
-				if err != nil {
-					common.SysLog("failed to update token cache: " + err.Error())
-				}
-			})
+func (token *Token) Update() error {
+	return token.UpdateSettings(nil)
+}
+
+func (token *Token) UpdateSettings(limit *int) error {
+	fields := []string{"name", "expired_time", "remain_quota", "unlimited_quota",
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry"}
+	if limit != nil {
+		token.MinuteSuccessLimit = *limit
+		fields = append(fields, "minute_success_limit")
+	}
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(token).Select(fields).Updates(token).Error; err != nil {
+			return err
 		}
-	}()
-	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		if limit != nil && *limit == 0 {
+			return tx.Where("token_id = ?", token.Id).Delete(&TokenCallSlot{}).Error
+		}
+		return nil
+	})
+	if err == nil && common.RedisEnabled {
+		err = cacheDeleteToken(token.Key)
+	}
 	return err
 }
 

@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "Auto-disable threshold (calls per minute)",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

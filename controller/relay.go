@@ -210,6 +210,17 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		slot, guardErr := reserveKeyCall(c)
+		if guardErr != nil {
+			newAPIError = guardErr
+			break
+		}
+		if slot != nil && relayFormat == types.RelayFormatOpenAIRealtime {
+			finishKeyCall(c, slot, model.CallRejected)
+			newAPIError = types.NewErrorWithStatusCode(errors.New("multi-turn Realtime sessions require an unlimited call rate"), "token_call_limit", http.StatusForbidden, types.ErrOptionWithSkipRetry())
+			break
+		}
+		relayInfo.StreamStatus = nil
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
@@ -221,6 +232,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError = relayHandler(c, relayInfo)
 		}
 
+		status := c.Writer.Status()
+		if newAPIError != nil {
+			status = newAPIError.StatusCode
+		}
+		finishKeyCall(c, slot, keyCallOutcome(status, relayInfo.StreamStatus))
 		if newAPIError == nil {
 			relaySucceeded := true
 			if relayInfo.StreamStatus != nil {
@@ -429,10 +445,26 @@ func RelayMidjourney(c *gin.Context) {
 		mjErr = relay.RelayMidjourneyTask(c, relayInfo.RelayMode)
 	case relayconstant.RelayModeMidjourneyTaskImageSeed:
 		mjErr = relay.RelayMidjourneyTaskImageSeed(c)
-	case relayconstant.RelayModeSwapFace:
-		mjErr = relay.RelaySwapFace(c, relayInfo)
 	default:
-		mjErr = relay.RelayMidjourneySubmit(c, relayInfo)
+		slot, guardErr := reserveKeyCall(c)
+		if guardErr != nil {
+			c.JSON(guardErr.StatusCode, gin.H{"code": 4, "description": guardErr.Error()})
+			return
+		}
+		if relayInfo.RelayMode == relayconstant.RelayModeSwapFace {
+			mjErr = relay.RelaySwapFace(c, relayInfo)
+		} else {
+			mjErr = relay.RelayMidjourneySubmit(c, relayInfo)
+		}
+		outcome := model.CallUncertain
+		if accepted, exists := c.Get("mj_call_accepted"); exists {
+			if accepted == true {
+				outcome = model.CallSucceeded
+			} else {
+				outcome = model.CallRejected
+			}
+		}
+		finishKeyCall(c, slot, outcome)
 	}
 	//err = relayMidjourneySubmit(c, relayMode)
 	log.Println(mjErr)
@@ -555,7 +587,17 @@ func RelayTask(c *gin.Context) {
 		}
 		c.Request.Body = io.NopCloser(bodyStorage)
 
+		slot, guardErr := reserveKeyCall(c)
+		if guardErr != nil {
+			taskErr = service.TaskErrorWrapperLocal(guardErr, "token_call_limit", guardErr.StatusCode)
+			break
+		}
 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+		outcome := model.CallSucceeded
+		if taskErr != nil {
+			outcome = keyCallOutcome(taskErr.StatusCode, nil)
+		}
+		finishKeyCall(c, slot, outcome)
 		if taskErr == nil {
 			break
 		}

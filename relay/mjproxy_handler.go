@@ -248,6 +248,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		}
 	}()
 	midjResponse := &mjResp.Response
+	c.Set("mj_call_accepted", mjResp.StatusCode == http.StatusOK && midjResponse.Code == 1)
 	midjourneyTask := &model.Midjourney{
 		UserId:      info.UserId,
 		Code:        midjResponse.Code,
@@ -529,6 +530,8 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		return &midjResponseWithStatus.Response
 	}
 	midjResponse := &midjResponseWithStatus.Response
+	c.Set("mj_call_accepted", midjResponseWithStatus.StatusCode == http.StatusOK &&
+		(midjResponse.Code == 1 || midjResponse.Code == 21 || midjResponse.Code == 22))
 
 	defer func() {
 		if consumeQuota && midjResponseWithStatus.StatusCode == 200 {

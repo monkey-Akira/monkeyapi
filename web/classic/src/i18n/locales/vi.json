@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "Ngưỡng tự tắt (lượt gọi mỗi phút)",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "Khi số lượt gọi thành công trong 60 giây vượt ngưỡng, khóa sẽ bị tắt cho đến khi bạn bật lại. Nhập 0 để bỏ giới hạn.",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + Gọi tạo hình ảnh {{symbol}}{{price}} / 1 lần * {{ratioType}} {{ratio}}",

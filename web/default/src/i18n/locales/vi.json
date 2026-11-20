@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "Ngưỡng tự tắt (lượt gọi mỗi phút)",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "Khi số lượt gọi thành công trong 60 giây vượt ngưỡng, khóa sẽ bị tắt cho đến khi bạn bật lại. Nhập 0 để bỏ giới hạn.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

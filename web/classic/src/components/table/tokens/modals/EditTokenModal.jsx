@@ -82,6 +82,7 @@ const EditTokenModal = (props) => {
     group: '',
     cross_group_retry: false,
     tokenCount: 1,
+    minute_success_limit: 3,
   });
 
   const handleCancel = () => {
@@ -173,7 +174,7 @@ const EditTokenModal = (props) => {
         quotaToDisplayAmount(data.remain_quota || 0).toFixed(6),
       );
       if (formApiRef.current) {
-        formApiRef.current.setValues({ ...getInitValues(), ...data });
+        formApiRef.current.setValues({ ...getInitValues(), ...data, minute_success_limit: data.minute_success_limit ?? 0 });
       }
     } else {
       showError(message);
@@ -380,6 +381,17 @@ const EditTokenModal = (props) => {
                       placeholder={t('请输入名称')}
                       rules={[{ required: true, message: t('请输入名称') }]}
                       showClear
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Form.InputNumber
+                      field='minute_success_limit'
+                      label={t('Auto-disable threshold (calls per minute)')}
+                      extraText={t('Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.')}
+                      min={0}
+                      step={1}
+                      precision={0}
+                      rules={[{ required: true }]}
                     />
                   </Col>
                   <Col span={24}>

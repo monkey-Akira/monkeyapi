@@ -258,6 +258,7 @@ func migrateDB() error {
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
+		&TokenCallSlot{},
 		&User{},
 		&UserLoginIpLog{},
 		&UserRiskAlert{},
@@ -309,6 +310,7 @@ func migrateDBFast() error {
 	}{
 		{&Channel{}, "Channel"},
 		{&Token{}, "Token"},
+		{&TokenCallSlot{}, "TokenCallSlot"},
 		{&User{}, "User"},
 		{&UserLoginIpLog{}, "UserLoginIpLog"},
 		{&UserRiskAlert{}, "UserRiskAlert"},
