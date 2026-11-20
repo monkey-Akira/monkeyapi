@@ -22,7 +22,6 @@ import { StatusBadge } from '@/components/status-badge'
 
 interface ModelBadgeProps {
   modelName: string
-  actualModel?: string
   className?: string
 }
 

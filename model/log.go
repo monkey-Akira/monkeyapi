@@ -125,6 +125,9 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			delete(otherMap, "admin_info")
 			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
+			delete(otherMap, "response_model")
+			delete(otherMap, "upstream_model_name")
+			delete(otherMap, "is_model_mapped")
 		}
 		applyUserErrorMessage(logs[i], otherMap)
 		if otherMap != nil {
