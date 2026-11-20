@@ -14,7 +14,9 @@ import (
 
 // GetCheckinStatus 获取用户签到状态和历史记录
 func GetCheckinStatus(c *gin.Context) {
-	setting := operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RLock()
+	setting := *operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RUnlock()
 	if !setting.Enabled {
 		common.ApiErrorMsg(c, "签到功能未启用")
 		return
@@ -35,19 +37,22 @@ func GetCheckinStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"enabled":                     setting.Enabled,
-			"min_quota":                   setting.MinQuota,
-			"max_quota":                   setting.MaxQuota,
-			"min_previous_day_requests":   setting.MinPreviousDayRequests,
-			"min_single_redemption_quota": setting.MinSingleRedemptionQuota,
-			"stats":                       stats,
+			"enabled":                      setting.Enabled,
+			"min_quota":                    setting.MinQuota,
+			"max_quota":                    setting.MaxQuota,
+			"min_previous_day_consumption": operation_setting.CheckinMinConsumption,
+			"min_previous_day_requests":    setting.MinPreviousDayRequests,
+			"min_single_redemption_quota":  setting.MinSingleRedemptionQuota,
+			"stats":                        stats,
 		},
 	})
 }
 
 // DoCheckin 执行用户签到
 func DoCheckin(c *gin.Context) {
-	setting := operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RLock()
+	setting := *operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RUnlock()
 	if !setting.Enabled {
 		common.ApiErrorMsg(c, "签到功能未启用")
 		return
@@ -69,7 +74,6 @@ func DoCheckin(c *gin.Context) {
 		"message": "签到成功",
 		"data": gin.H{
 			"quota_awarded": checkin.QuotaAwarded,
-			"max_quota":     setting.MaxQuota,
 			"checkin_date":  checkin.CheckinDate},
 	})
 }

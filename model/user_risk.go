@@ -131,7 +131,7 @@ func CheckAndUpsertIpRiskAlert(ip string) error {
 	if status == "" || (status == RiskAlertStatusHandled && userCount > alert.UserCount) {
 		status = RiskAlertStatusOpen
 	}
-	return DB.Model(&UserRiskAlert{}).Where("id = ?", alert.Id).Updates(map[string]interface{}{
+	return DB.Model(&UserRiskAlert{}).Where("id = ?", alert.Id).Updates(map[string]any{
 		"user_count":     userCount,
 		"register_count": len(registerUserIds),
 		"login_count":    len(loginUserIds),
@@ -223,7 +223,7 @@ func UpdateUserRiskAlertStatus(id int, status string) error {
 	default:
 		return fmt.Errorf("invalid risk alert status")
 	}
-	return DB.Model(&UserRiskAlert{}).Where("id = ?", id).Updates(map[string]interface{}{
+	return DB.Model(&UserRiskAlert{}).Where("id = ?", id).Updates(map[string]any{
 		"status":     status,
 		"updated_at": common.GetTimestamp(),
 	}).Error
@@ -235,40 +235,34 @@ func DisableUserRiskAlertUsers(id int) (*DisableRiskAlertUsersResult, error) {
 		return nil, err
 	}
 
-	result := &DisableRiskAlertUsersResult{
-		DisabledIds: []int{},
-	}
-	for _, user := range users {
+	result := &DisableRiskAlertUsersResult{DisabledIds: []int{}}
+	for i := range users {
+		user := users[i]
 		if user.Role != common.RoleCommonUser || user.Status != common.UserStatusEnabled {
 			result.SkippedCount++
 			continue
 		}
-		result.DisabledIds = append(result.DisabledIds, user.Id)
-	}
-	if len(result.DisabledIds) == 0 {
-		return result, nil
-	}
 
-	update := DB.Model(&User{}).
-		Where("id IN ? AND role = ? AND status = ?", result.DisabledIds, common.RoleCommonUser, common.UserStatusEnabled).
-		Update("status", common.UserStatusDisabled)
-	if update.Error != nil {
-		return nil, update.Error
-	}
-	result.DisabledCount = int(update.RowsAffected)
-
-	for _, userId := range result.DisabledIds {
-		if err := InvalidateUserCache(userId); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate user cache for risk disabled user %d: %s", userId, err.Error()))
+		var current User
+		if err := DB.Where("id = ? AND role = ? AND status = ?", user.Id, common.RoleCommonUser, common.UserStatusEnabled).First(&current).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				result.SkippedCount++
+				continue
+			}
+			return nil, err
 		}
-		if err := InvalidateUserTokensCache(userId); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for risk disabled user %d: %s", userId, err.Error()))
+		current.Status = common.UserStatusDisabled
+		if err := current.Update(false); err != nil {
+			return nil, err
 		}
+		if err := InvalidateUserTokensCache(current.Id); err != nil {
+			return nil, err
+		}
+		result.DisabledIds = append(result.DisabledIds, current.Id)
+		result.DisabledCount++
 	}
-
 	return result, nil
 }
-
 func IsUserIpRiskAlertEnabled() bool {
 	common.OptionMapRWMutex.RLock()
 	value, ok := common.OptionMap["UserIpRiskAlertEnabled"]

@@ -7,14 +7,15 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
@@ -34,29 +35,16 @@ func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, re
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
+	info.ObserveResponseModel(gjson.GetBytes(responseBody, "modelVersion").Str)
+	countGeminiBillableFunctionCalls(info, &geminiResponse)
 
 	if len(geminiResponse.Candidates) == 0 && geminiResponse.PromptFeedback != nil && geminiResponse.PromptFeedback.BlockReason != nil {
+		info.PerformanceBusinessRejection = true
 		common.SetContextKey(c, constant.ContextKeyAdminRejectReason, fmt.Sprintf("gemini_block_reason=%s", *geminiResponse.PromptFeedback.BlockReason))
 	}
 
-	// 计算使用量（基于 UsageMetadata）
-	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
-	hasTextOutput, hasNonTextOutput := geminiResponseOutputState(&geminiResponse)
-	if customText := service.GetEmptyResponseRefundCustomText(c, info, &usage, hasNonTextOutput); customText != "" && !hasTextOutput && geminiResponse.PromptFeedback == nil {
-		stopReason := "STOP"
-		geminiResponse.Candidates = []dto.GeminiChatCandidate{{
-			Index:        0,
-			FinishReason: &stopReason,
-			Content: dto.GeminiChatContent{
-				Role:  "model",
-				Parts: []dto.GeminiPart{{Text: customText}},
-			},
-		}}
-		responseBody, err = common.Marshal(geminiResponse)
-		if err != nil {
-			return nil, types.NewError(err, types.ErrorCodeBadResponseBody)
-		}
-	}
+	// 计算使用量（优先上游 UsageMetadata，缺失时本地估算并保留 Gemini 计费语义）
+	usage := buildUsageFromGeminiResponse(c, info, &geminiResponse)
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
@@ -97,19 +85,7 @@ func NativeGeminiEmbeddingHandler(c *gin.Context, resp *http.Response, info *rel
 func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	helper.SetEventStreamHeaders(c)
 
-	hasTextOutput := false
-	hasNonTextOutput := false
-	var pendingFinalResponse *dto.GeminiChatResponse
-	var pendingFinalData string
-	usage, newAPIError := geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
-		textOutput, nonTextOutput := geminiResponseOutputState(geminiResponse)
-		hasTextOutput = hasTextOutput || textOutput
-		hasNonTextOutput = hasNonTextOutput || nonTextOutput
-		if geminiResponseIsFinished(geminiResponse) {
-			pendingFinalResponse = geminiResponse
-			pendingFinalData = data
-			return true
-		}
+	return geminiStreamHandler(c, info, resp, func(data string, geminiResponse *dto.GeminiChatResponse) bool {
 		err := helper.StringData(c, data)
 		if err != nil {
 			logger.LogError(c, "failed to write stream data: "+err.Error())
@@ -118,43 +94,4 @@ func GeminiTextGenerationStreamHandler(c *gin.Context, info *relaycommon.RelayIn
 		info.SendResponseCount++
 		return true
 	})
-	if newAPIError != nil {
-		return usage, newAPIError
-	}
-	customText := service.GetEmptyResponseRefundCustomText(c, info, usage, hasNonTextOutput)
-	if customText != "" && !hasTextOutput {
-		stopReason := "STOP"
-		customResponse := dto.GeminiChatResponse{
-			Candidates: []dto.GeminiChatCandidate{{
-				Index:        0,
-				FinishReason: &stopReason,
-				Content: dto.GeminiChatContent{
-					Role:  "model",
-					Parts: []dto.GeminiPart{{Text: customText}},
-				},
-			}},
-		}
-		if pendingFinalResponse != nil {
-			customResponse.UsageMetadata = pendingFinalResponse.UsageMetadata
-		}
-		data, err := common.Marshal(customResponse)
-		if err == nil {
-			_ = helper.StringData(c, string(data))
-		}
-	} else if pendingFinalResponse != nil {
-		_ = helper.StringData(c, pendingFinalData)
-	}
-	return usage, nil
-}
-
-func geminiResponseIsFinished(response *dto.GeminiChatResponse) bool {
-	if response == nil {
-		return false
-	}
-	for _, candidate := range response.Candidates {
-		if candidate.FinishReason != nil && *candidate.FinishReason != "" {
-			return true
-		}
-	}
-	return false
 }

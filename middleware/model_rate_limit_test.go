@@ -1,186 +1,102 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/setting"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSelectedModelsShareSuccessfulRequestLimit(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	resetMemoryModelSuccessQuotas()
-	previousConfig := setting.ModelRequestRateLimitModels2JSONString()
-	previousEnabled := setting.ModelRequestRateLimitEnabled
-	previousDuration := setting.ModelRequestRateLimitDurationMinutes
-	previousTotalCount := setting.ModelRequestRateLimitCount
-	previousSuccessCount := setting.ModelRequestRateLimitSuccessCount
-	previousRedisEnabled := common.RedisEnabled
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateModelRequestRateLimitModelsByJSONString(previousConfig))
-		setting.ModelRequestRateLimitEnabled = previousEnabled
-		setting.ModelRequestRateLimitDurationMinutes = previousDuration
-		setting.ModelRequestRateLimitCount = previousTotalCount
-		setting.ModelRequestRateLimitSuccessCount = previousSuccessCount
-		common.RedisEnabled = previousRedisEnabled
-		resetMemoryModelSuccessQuotas()
-	})
+func TestModelRedisRateLimitUsesUTCRegardlessOfLocalTimezone(t *testing.T) {
+	redisServer, redisClient := useRateLimitMiniRedis(t)
+	previousLocation := time.Local
+	time.Local = time.FixedZone("test-utc-plus-eight", 8*60*60)
+	t.Cleanup(func() { time.Local = previousLocation })
 
-	modelSuffix := time.Now().UnixNano()
-	modelA := fmt.Sprintf("free-model-a-%d", modelSuffix)
-	modelB := fmt.Sprintf("free-model-b-%d", modelSuffix)
-	unselectedModel := fmt.Sprintf("paid-model-%d", modelSuffix)
-	require.NoError(t, setting.UpdateModelRequestRateLimitModelsByJSONString(
-		fmt.Sprintf(`{"mode":"selected","models":[%q,%q]}`, modelA, modelB),
-	))
-	setting.ModelRequestRateLimitEnabled = true
-	setting.ModelRequestRateLimitDurationMinutes = 1
-	setting.ModelRequestRateLimitCount = 0
-	setting.ModelRequestRateLimitSuccessCount = 2
-	common.RedisEnabled = false
+	ctx := context.Background()
+	recordKey := "rateLimit:model-utc-record"
+	recordRedisRequest(ctx, redisClient, recordKey, 2)
+	recorded, err := redisClient.LIndex(ctx, recordKey, 0).Result()
+	require.NoError(t, err)
+	recordedAt, err := time.Parse(modelRateLimitTimeFormat, recorded)
+	require.NoError(t, err)
+	assert.WithinDuration(t, time.Now().UTC(), recordedAt, 2*time.Second)
 
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set("id", int(modelSuffix%1000000000)+1000000000)
-		c.Next()
-	})
-	router.Use(ModelRequestRateLimit())
-	router.POST("/v1/chat/completions", func(c *gin.Context) {
-		if c.GetHeader("X-Test-Relay-Failed") == "true" {
-			common.SetContextKey(c, constant.ContextKeyRelayRequestSucceeded, false)
-			c.Status(http.StatusOK)
-			return
-		}
-		if c.GetHeader("X-Test-Fail") == "true" {
-			c.Status(http.StatusInternalServerError)
-			return
-		}
-		c.Status(http.StatusOK)
-	})
-
-	requestModel := func(modelName string, headers ...string) *httptest.ResponseRecorder {
-		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(
-			http.MethodPost,
-			"/v1/chat/completions",
-			strings.NewReader(fmt.Sprintf(`{"model":%q}`, modelName)),
-		)
-		request.Header.Set("Content-Type", "application/json")
-		for index := 0; index+1 < len(headers); index += 2 {
-			request.Header.Set(headers[index], headers[index+1])
-		}
-		router.ServeHTTP(recorder, request)
-		return recorder
-	}
-
-	require.Equal(t, http.StatusOK, requestModel(modelA, "X-Test-Relay-Failed", "true").Code)
-	require.Equal(t, http.StatusInternalServerError, requestModel(modelA, "X-Test-Fail", "true").Code)
-	require.Equal(t, http.StatusOK, requestModel(unselectedModel).Code)
-	require.Equal(t, http.StatusOK, requestModel(modelA).Code)
-	require.Equal(t, http.StatusOK, requestModel(modelB).Code)
-	require.Equal(t, http.StatusOK, requestModel(unselectedModel).Code)
-	require.Equal(t, http.StatusTooManyRequests, requestModel(modelA).Code)
+	checkKey := "rateLimit:model-utc-check"
+	withinWindow := time.Now().UTC().Add(-30 * time.Second).Format(modelRateLimitTimeFormat)
+	_, err = redisServer.Push(checkKey, withinWindow, withinWindow)
+	require.NoError(t, err)
+	allowed, err := checkRedisRateLimit(ctx, redisClient, checkKey, 2, 60)
+	require.NoError(t, err)
+	assert.False(t, allowed, "an existing UTC timestamp inside the window must remain limited on a non-UTC host")
 }
 
-func TestSuccessfulRequestLimitReservesConcurrentCapacity(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	resetMemoryModelSuccessQuotas()
-	previousConfig := setting.ModelRequestRateLimitModels2JSONString()
-	previousEnabled := setting.ModelRequestRateLimitEnabled
-	previousDuration := setting.ModelRequestRateLimitDurationMinutes
-	previousTotalCount := setting.ModelRequestRateLimitCount
-	previousSuccessCount := setting.ModelRequestRateLimitSuccessCount
-	previousRedisEnabled := common.RedisEnabled
-	t.Cleanup(func() {
-		require.NoError(t, setting.UpdateModelRequestRateLimitModelsByJSONString(previousConfig))
-		setting.ModelRequestRateLimitEnabled = previousEnabled
-		setting.ModelRequestRateLimitDurationMinutes = previousDuration
-		setting.ModelRequestRateLimitCount = previousTotalCount
-		setting.ModelRequestRateLimitSuccessCount = previousSuccessCount
-		common.RedisEnabled = previousRedisEnabled
-		resetMemoryModelSuccessQuotas()
-	})
+var modelRateLimitTestUsers atomic.Int64
 
-	modelSuffix := time.Now().UnixNano()
-	selectedModel := fmt.Sprintf("limited-model-%d", modelSuffix)
-	require.NoError(t, setting.UpdateModelRequestRateLimitModelsByJSONString(
-		fmt.Sprintf(`{"mode":"selected","models":[%q]}`, selectedModel),
-	))
-	setting.ModelRequestRateLimitEnabled = true
-	setting.ModelRequestRateLimitDurationMinutes = 1
-	setting.ModelRequestRateLimitCount = 0
-	setting.ModelRequestRateLimitSuccessCount = 2
-	common.RedisEnabled = false
+func TestModelRateLimitStreamFailuresDoNotConsumeSuccessLimit(t *testing.T) {
+	for _, backend := range []string{"memory", "redis"} {
+		for _, totalLimit := range []int{0, 2} {
+			t.Run(fmt.Sprintf("%s/total=%d", backend, totalLimit), func(t *testing.T) {
+				userID := 7200000 + int(modelRateLimitTestUsers.Add(1))
+				handler := memoryRateLimitHandler(60, totalLimit, 1)
+				if backend == "redis" {
+					useRateLimitMiniRedis(t)
+					handler = redisRateLimitHandler(60, totalLimit, 1)
+				}
+				router := gin.New()
+				router.GET("/:outcome", func(c *gin.Context) { c.Set("id", userID) }, handler, func(c *gin.Context) {
+					status := relaycommon.NewStreamStatus()
+					if c.Param("outcome") == "failed" {
+						status.MarkFailed("server_error", "", 0)
+					} else {
+						status.MarkCompleted()
+					}
+					common.SetContextKey(c, constant.ContextKeyResponseStreamStatus, status)
+					c.Status(http.StatusOK)
+				})
+				assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/failed", "127.0.0.1:1000").Code)
+				if totalLimit > 0 {
+					assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/failed", "127.0.0.1:1000").Code)
+				} else {
+					assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/completed", "127.0.0.1:1000").Code)
+				}
+				assert.Equal(t, http.StatusTooManyRequests, performRateLimitRequest(router, "/completed", "127.0.0.1:1000").Code)
+			})
+		}
+	}
+}
 
-	const requestCount = 8
-	entered := make(chan struct{}, requestCount)
-	release := make(chan struct{})
+func TestModelMemoryRateLimitReservesConcurrentSuccessAdmission(t *testing.T) {
+	userID := 7200000 + int(modelRateLimitTestUsers.Add(1))
+	entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set("id", int(modelSuffix%1000000000)+1000000000)
-		c.Next()
-	})
-	router.Use(ModelRequestRateLimit())
-	router.POST("/v1/chat/completions", func(c *gin.Context) {
-		entered <- struct{}{}
-		<-release
+	router.GET("/:outcome", func(c *gin.Context) { c.Set("id", userID) }, memoryRateLimitHandler(60, 0, 1), func(c *gin.Context) {
+		if c.Param("outcome") == "failed" {
+			close(entered)
+			<-release
+			status := relaycommon.NewStreamStatus()
+			status.MarkFailed("server_error", "", 0)
+			common.SetContextKey(c, constant.ContextKeyResponseStreamStatus, status)
+		}
 		c.Status(http.StatusOK)
 	})
-
-	start := make(chan struct{})
-	statuses := make(chan int, requestCount)
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(requestCount)
-	for range requestCount {
-		go func() {
-			defer waitGroup.Done()
-			<-start
-			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(
-				http.MethodPost,
-				"/v1/chat/completions",
-				strings.NewReader(fmt.Sprintf(`{"model":%q}`, selectedModel)),
-			)
-			request.Header.Set("Content-Type", "application/json")
-			router.ServeHTTP(recorder, request)
-			statuses <- recorder.Code
-		}()
-	}
-	close(start)
-
-	for range 2 {
-		select {
-		case <-entered:
-		case <-time.After(2 * time.Second):
-			close(release)
-			t.Fatal("timed out waiting for successful request quota reservations")
-		}
-	}
+	go func() {
+		defer close(finished)
+		assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/failed", "127.0.0.1:1000").Code)
+	}()
+	<-entered
+	assert.Equal(t, http.StatusTooManyRequests, performRateLimitRequest(router, "/completed", "127.0.0.1:1000").Code)
 	close(release)
-	waitGroup.Wait()
-	close(statuses)
-
-	successCount := 0
-	rateLimitedCount := 0
-	for status := range statuses {
-		switch status {
-		case http.StatusOK:
-			successCount++
-		case http.StatusTooManyRequests:
-			rateLimitedCount++
-		default:
-			t.Fatalf("unexpected response status: %d", status)
-		}
-	}
-	require.Equal(t, 2, successCount)
-	require.Equal(t, requestCount-2, rateLimitedCount)
+	<-finished
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/completed", "127.0.0.1:1000").Code)
+	assert.Equal(t, http.StatusTooManyRequests, performRateLimitRequest(router, "/completed", "127.0.0.1:1000").Code)
 }

@@ -49,7 +49,11 @@ func PreviewModelPricing(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, preview)
+	common.ApiSuccess(c, model.ModelPricingDescription{
+		Effective:      preview,
+		CacheWriteMode: model.ResolveCacheWriteMode(request.ModelName, request.Pricing),
+		BillingDetails: model.ResolveLegacyBillingDetails(request.ModelName, preview, request.Pricing),
+	})
 }
 
 func UpdateModelPricingConfig(c *gin.Context) {
@@ -72,5 +76,6 @@ func UpdateModelPricingConfig(c *gin.Context) {
 	for _, change := range request.Changes {
 		names = append(names, change.ModelName)
 	}
+	recordManageAudit(c, "model.pricing.update", map[string]any{"models": names})
 	common.ApiSuccess(c, gin.H{"updated_models": names})
 }

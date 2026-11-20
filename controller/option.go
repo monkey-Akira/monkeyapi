@@ -1,16 +1,22 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -80,6 +86,9 @@ func GetOptions(c *gin.Context) {
 	optionValues := make(map[string]string)
 	common.OptionMapRWMutex.Lock()
 	for k, v := range common.OptionMap {
+		if k == "theme.frontend" || k == "billing_setting.billing_mode" || k == "billing_setting.billing_expr" {
+			continue
+		}
 		value := common.Interface2String(v)
 		isSensitiveKey := strings.HasSuffix(k, "Token") ||
 			strings.HasSuffix(k, "Secret") ||
@@ -93,14 +102,24 @@ func GetOptions(c *gin.Context) {
 			Key:   k,
 			Value: value,
 		})
-		for _, optionKey := range completionRatioMetaOptionKeys {
-			if optionKey == k {
-				optionValues[k] = value
-				break
-			}
+		if slices.Contains(completionRatioMetaOptionKeys, k) {
+			optionValues[k] = value
 		}
 	}
 	common.OptionMapRWMutex.Unlock()
+	// Display the same effective expressions used by pricing and settlement,
+	// including built-in defaults absent from persisted administrator options.
+	for key, values := range map[string]map[string]string{
+		"billing_setting.billing_mode": billing_setting.GetBillingModeCopy(),
+		"billing_setting.billing_expr": billing_setting.GetBillingExprCopy(),
+	} {
+		encoded, err := common.Marshal(values)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		options = append(options, &model.Option{Key: key, Value: string(encoded)})
+	}
 	options = append(options, &model.Option{
 		Key:   "CompletionRatioMeta",
 		Value: buildCompletionRatioMetaValue(optionValues),
@@ -115,6 +134,50 @@ func GetOptions(c *gin.Context) {
 type OptionUpdateRequest struct {
 	Key   string `json:"key"`
 	Value any    `json:"value"`
+}
+
+func UpdatePasskeyDomains(c *gin.Context) {
+	var request struct {
+		RPID                *string `json:"rp_id"`
+		LegacyRPIDs         *string `json:"legacy_rp_ids"`
+		Origins             *string `json:"origins"`
+		Preview             bool    `json:"preview"`
+		RemovalConfirmation string  `json:"removal_confirmation"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil || request.RPID == nil || request.LegacyRPIDs == nil || request.Origins == nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	change, err := model.UpdatePasskeyDomainOptions(map[string]string{
+		"passkey.rp_id": *request.RPID, "passkey.legacy_rp_ids": *request.LegacyRPIDs, "passkey.origins": *request.Origins,
+	}, request.Preview, request.RemovalConfirmation)
+	if err != nil {
+		writePasskeyDomainSettingsError(c, err)
+		if !request.Preview {
+			recordPasskeyDomainAudit(c, change, request.RemovalConfirmation != "", err)
+		}
+		return
+	}
+	if !request.Preview {
+		recordPasskeyDomainAudit(c, change, request.RemovalConfirmation != "", nil)
+	}
+	common.ApiSuccess(c, change)
+}
+
+func writePasskeyDomainSettingsError(c *gin.Context, err error) {
+	var removal *model.PasskeyDomainRemovalError
+	if errors.As(err, &removal) {
+		c.JSON(http.StatusConflict, gin.H{
+			"success": false, "code": "PASSKEY_RP_ID_REMOVAL_CONFIRMATION_REQUIRED",
+			"message": i18n.T(c, i18n.MsgPasskeyRPIDRemovalConfirmation), "data": removal.Change,
+		})
+		return
+	}
+	if errors.Is(err, system_setting.ErrPasskeyRPIDInvalid) {
+		writeSecurityOperationError(c, err)
+		return
+	}
+	common.ApiError(c, err)
 }
 
 func UpdateOption(c *gin.Context) {
@@ -146,6 +209,12 @@ func UpdateOption(c *gin.Context) {
 	default:
 		if isPaymentComplianceOptionKey(option.Key) {
 			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")
+			return
+		}
+	}
+	if option.Key == "TaskPublicAddress" && option.Value.(string) != "" {
+		if err := service.ValidateTaskArtifactBaseURL(option.Value.(string)); err != nil {
+			common.ApiErrorMsg(c, err.Error())
 			return
 		}
 	}
@@ -208,23 +277,51 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	case "TelegramOAuthEnabled":
-		if option.Value == "true" && common.TelegramBotToken == "" {
+		if option.Value == "true" && !system_setting.GetTelegramSettings().IsConfigured() {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "无法启用 Telegram OAuth，请先填入 Telegram Bot Token！",
+				"code":    "TELEGRAM_OAUTH_NOT_CONFIGURED",
+				"message": "Telegram OAuth is not configured or enabled. Please contact your administrator.",
 			})
 			return
 		}
 	case "theme.frontend":
-		if option.Value != "default" && option.Value != "classic" {
+		if option.Value != "default" {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "无效的主题值，可选值：default（新版前端）、classic（经典前端）",
+				"message": "Classic 前端已移除，主题只能设置为 default",
 			})
 			return
 		}
 	case "GroupRatio":
 		err = ratio_setting.CheckGroupRatio(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "gemini.safety_settings":
+		err = model_setting.ValidateGeminiSafetySettings(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "claude.default_max_tokens":
+		err = model_setting.ValidateClaudeDefaultMaxTokens(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case operation_setting.ToolPriceOptionKey:
+		err = operation_setting.ValidateToolPricesJSON(option.Value.(string))
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -277,16 +374,6 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "ModelRequestRateLimitModels":
-		normalized, normalizeErr := setting.NormalizeModelRequestRateLimitModels(option.Value.(string))
-		if normalizeErr != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": normalizeErr.Error(),
-			})
-			return
-		}
-		option.Value = normalized
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {
@@ -305,10 +392,57 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "billing_setting.billing_expr":
+		expressions := make(map[string]string)
+		if err = common.UnmarshalJsonStr(option.Value.(string), &expressions); err != nil {
+			common.ApiErrorMsg(c, "计费表达式配置必须是模型到表达式的 JSON 对象: "+err.Error())
+			return
+		}
+		models := make([]string, 0, len(expressions))
+		for modelName := range expressions {
+			models = append(models, modelName)
+		}
+		sort.Strings(models)
+		storedVariants := billing_setting.GetPluginBillingExprCopy()
+		for _, modelName := range models {
+			variants := make(map[string]any)
+			for key, expression := range storedVariants {
+				if plugin, name, ok := billing_setting.SplitPluginBillingExprKey(key); ok && name == modelName {
+					variants[plugin] = expression
+				}
+			}
+			err = model.ValidateModelPricing(modelName, model.PricingValues{
+				"billing_setting.billing_expr":          expressions[modelName],
+				billing_setting.PluginBillingExprOption: variants,
+			})
+			if err != nil {
+				common.ApiErrorMsg(c, fmt.Sprintf("模型 %s 的计费表达式无效: %v", modelName, err))
+				return
+			}
+		}
+	case billing_setting.PluginBillingExprOption:
+		var expressions map[string]string
+		if err = common.UnmarshalJsonStr(option.Value.(string), &expressions); err != nil || expressions == nil {
+			common.ApiErrorMsg(c, "plugin billing expressions must be a JSON object")
+			return
+		}
+		for key, expression := range expressions {
+			plugin, name, valid := billing_setting.SplitPluginBillingExprKey(key)
+			if !valid {
+				common.ApiErrorMsg(c, "invalid plugin billing expression key: "+key)
+				return
+			}
+			if err = model.ValidateModelPricing(name, model.PricingValues{
+				billing_setting.PluginBillingExprOption: map[string]any{plugin: expression},
+			}); err != nil {
+				common.ApiErrorMsg(c, err.Error())
+				return
+			}
+		}
 	case "error_message_setting.mappings":
 		var mappings map[string]string
 		err = common.UnmarshalJsonStr(option.Value.(string), &mappings)
-		if err != nil {
+		if err != nil || mappings == nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "错误文案映射必须是 JSON 对象",
@@ -323,54 +457,6 @@ func UpdateOption(c *gin.Context) {
 				})
 				return
 			}
-		}
-	case "empty_response_refund_setting.mode":
-		mode := option.Value.(string)
-		if mode != operation_setting.EmptyResponseRefundModeOff &&
-			mode != operation_setting.EmptyResponseRefundModeObserve &&
-			mode != operation_setting.EmptyResponseRefundModeRefund {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "空响应自动退款模式只能是 off、observe 或 refund",
-			})
-			return
-		}
-	case "empty_response_refund_setting.models":
-		var models []string
-		err = common.UnmarshalJsonStr(option.Value.(string), &models)
-		if err != nil || models == nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "空响应自动退款模型必须是 JSON 字符串数组",
-			})
-			return
-		}
-		normalizedModels := make([]string, 0, len(models))
-		seenModels := make(map[string]struct{}, len(models))
-		for _, modelName := range models {
-			modelName = strings.TrimSpace(modelName)
-			if modelName == "" {
-				continue
-			}
-			if _, exists := seenModels[modelName]; exists {
-				continue
-			}
-			seenModels[modelName] = struct{}{}
-			normalizedModels = append(normalizedModels, modelName)
-		}
-		normalizedJSON, marshalErr := common.Marshal(normalizedModels)
-		if marshalErr != nil {
-			common.ApiError(c, marshalErr)
-			return
-		}
-		option.Value = string(normalizedJSON)
-	case "empty_response_refund_setting.custom_response_text":
-		if len([]rune(option.Value.(string))) > 4000 {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "空响应自定义返回词不能超过 4000 个字符",
-			})
-			return
 		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
@@ -409,11 +495,30 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
-	err = model.UpdateOption(option.Key, option.Value.(string))
-	if err != nil {
-		common.ApiError(c, err)
+	if model.IsPasskeyDomainOption(option.Key) {
+		change, updateErr := model.UpdatePasskeyDomainOptions(map[string]string{option.Key: option.Value.(string)}, false, "")
+		if updateErr != nil {
+			writePasskeyDomainSettingsError(c, updateErr)
+			recordPasskeyDomainAudit(c, change, false, updateErr)
+			return
+		}
+		recordPasskeyDomainAudit(c, change, false, nil)
+		common.ApiSuccess(c, change)
 		return
 	}
+	err = model.UpdateOption(option.Key, option.Value.(string))
+	if err != nil {
+		if errors.Is(err, system_setting.ErrPasskeyRPIDInvalid) {
+			writeSecurityOperationError(c, err)
+		} else {
+			common.ApiError(c, err)
+		}
+		return
+	}
+	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
+	recordManageAudit(c, "option.update", map[string]any{
+		"key": option.Key,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

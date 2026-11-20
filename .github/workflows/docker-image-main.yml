@@ -17,7 +17,9 @@ concurrency:
 jobs:
   build-and-push:
     name: Build and push GHCR image
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Check out
@@ -30,7 +32,7 @@ jobs:
         shell: bash
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          VERSION="main-$(date +'%Y%m%d')-${GITHUB_SHA::7}"
+          VERSION="main-$(date -u +'%Y%m%d')-${GITHUB_SHA::7}"
           echo "$VERSION" > VERSION
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -61,9 +63,12 @@ jobs:
           sbom: false
 
       - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
           echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.meta.outputs.image }}:latest" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "$IMAGE:latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "$IMAGE:$VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -16,10 +16,8 @@ type EmptyResponseRefundSetting struct {
 }
 
 var emptyResponseRefundSetting = EmptyResponseRefundSetting{
-	Mode:                  EmptyResponseRefundModeOff,
-	Models:                []string{},
-	CustomResponseEnabled: false,
-	CustomResponseText:    "",
+	Mode:   EmptyResponseRefundModeOff,
+	Models: []string{},
 }
 
 func init() {
@@ -27,10 +25,10 @@ func init() {
 }
 
 func GetEmptyResponseRefundMode(modelName string) string {
-	mode := emptyResponseRefundSetting.Mode
-	if modelName == "" || mode == EmptyResponseRefundModeOff {
+	if modelName == "" {
 		return EmptyResponseRefundModeOff
 	}
+	mode := emptyResponseRefundSetting.Mode
 	if mode != EmptyResponseRefundModeObserve && mode != EmptyResponseRefundModeRefund {
 		return EmptyResponseRefundModeOff
 	}

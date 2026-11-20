@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/types"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +19,7 @@ func SystemPerformanceCheck() gin.HandlerFunc {
 		if strings.HasPrefix(path, "/v1/messages") {
 			if err := checkSystemPerformance(); err != nil {
 				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToClaudeError(),
+					"error": common.ToClaudeErrorWithCustomMessage(err),
 				})
 				c.Abort()
 				return
@@ -27,7 +27,7 @@ func SystemPerformanceCheck() gin.HandlerFunc {
 		} else {
 			if err := checkSystemPerformance(); err != nil {
 				c.JSON(err.StatusCode, gin.H{
-					"error": err.ToOpenAIError(),
+					"error": common.ToOpenAIErrorWithCustomMessage(err),
 				})
 				c.Abort()
 				return

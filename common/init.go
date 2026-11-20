@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -46,19 +47,21 @@ func InitEnv() {
 		os.Exit(0)
 	}
 
-	ss, ok := os.LookupEnv("SESSION_SECRET")
-	if !ok {
-		log.Fatal("SESSION_SECRET is required and must be generated with a cryptographically secure random generator")
+	if secret, ok := os.LookupEnv("SESSION_SECRET"); ok {
+		if err := validateSessionSecret(secret); err != nil {
+			log.Fatalf("invalid SESSION_SECRET: %v", err)
+		}
+		SessionSecret = secret
 	}
-	if err := validateSessionSecret(ss); err != nil {
-		log.Fatalf("invalid SESSION_SECRET: %v", err)
-	}
-	SessionSecret = ss
 	if os.Getenv("CRYPTO_SECRET") != "" {
 		CryptoSecret = os.Getenv("CRYPTO_SECRET")
 	} else {
 		CryptoSecret = SessionSecret
 	}
+	if err := InitSessionCookieSettings(); err != nil {
+		log.Fatal(err)
+	}
+	initUserSessionSettings()
 	if os.Getenv("SQLITE_PATH") != "" {
 		SQLitePath = os.Getenv("SQLITE_PATH")
 	}
@@ -80,7 +83,8 @@ func InitEnv() {
 	DebugEnabled = os.Getenv("DEBUG") == "true"
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
 	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
-	NodeName = os.Getenv("NODE_NAME")
+	PasswordLoginEncryptionEnabled = GetEnvOrDefaultBool("PASSWORD_LOGIN_ENCRYPTION_ENABLED", false)
+	initNodeNameIdentity()
 	TLSInsecureSkipVerify = GetEnvOrDefaultBool("TLS_INSECURE_SKIP_VERIFY", false)
 	if TLSInsecureSkipVerify {
 		if tr, ok := http.DefaultTransport.(*http.Transport); ok && tr != nil {
@@ -91,6 +95,8 @@ func InitEnv() {
 			}
 		}
 	}
+	SMTPStartTLSEnabled = GetEnvOrDefaultBool("SMTP_STARTTLS_ENABLE", GetEnvOrDefaultBool("SMTP_STARTTLS_ENABLED", false))
+	SMTPInsecureSkipVerify = GetEnvOrDefaultBool("SMTP_INSECURE_SKIP_VERIFY", GetEnvOrDefaultBool("SMTP_TLS_INSECURE_SKIP_VERIFY", false))
 
 	// Parse requestInterval and set RequestInterval
 	requestInterval, _ = strconv.Atoi(os.Getenv("POLLING_INTERVAL"))
@@ -100,6 +106,8 @@ func InitEnv() {
 	SyncFrequency = GetEnvOrDefault("SYNC_FREQUENCY", 60)
 	BatchUpdateInterval = GetEnvOrDefault("BATCH_UPDATE_INTERVAL", 5)
 	RelayTimeout = GetEnvOrDefault("RELAY_TIMEOUT", 0)
+	RelayIdleConnTimeout = GetEnvOrDefault("RELAY_IDLE_CONN_TIMEOUT", 90)
+	RelayResponseHeaderTimeout = GetEnvOrDefault("RELAY_RESPONSE_HEADER_TIMEOUT", 1800)
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 
@@ -109,11 +117,11 @@ func InitEnv() {
 
 	// Initialize rate limit variables
 	GlobalApiRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_API_RATE_LIMIT_ENABLE", true)
-	GlobalApiRateLimitNum = GetEnvOrDefault("GLOBAL_API_RATE_LIMIT", 180)
+	GlobalApiRateLimitNum = GetEnvOrDefault("GLOBAL_API_RATE_LIMIT", 360)
 	GlobalApiRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_API_RATE_LIMIT_DURATION", 180))
 
 	GlobalWebRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_WEB_RATE_LIMIT_ENABLE", true)
-	GlobalWebRateLimitNum = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 60)
+	GlobalWebRateLimitNum = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 120)
 	GlobalWebRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT_DURATION", 180))
 
 	CriticalRateLimitEnable = GetEnvOrDefaultBool("CRITICAL_RATE_LIMIT_ENABLE", true)
@@ -128,32 +136,76 @@ func InitEnv() {
 
 func validateSessionSecret(secret string) error {
 	if secret == "" {
-		return fmt.Errorf("value cannot be empty")
+		return fmt.Errorf("must not be empty")
 	}
 	if strings.TrimSpace(secret) != secret {
-		return fmt.Errorf("value cannot contain leading or trailing whitespace")
+		return fmt.Errorf("must not contain leading or trailing whitespace")
 	}
-	if len([]byte(secret)) < 32 {
-		return fmt.Errorf("value must be at least 32 bytes")
+	if len(secret) < 32 {
+		return fmt.Errorf("must be at least 32 bytes")
 	}
-	knownWeakValues := map[string]struct{}{
-		"random_string":              {},
-		"change_this_session_secret": {},
-		"change_me":                  {},
-		"session_secret":             {},
-		"your_session_secret":        {},
+
+	lowerSecret := strings.ToLower(secret)
+	weakIndicators := []string{
+		"random_string",
+		"change_this_session_secret",
+		"change_me",
+		"changeme",
+		"session_secret",
+		"your_session_secret",
+		"replace_me",
 	}
-	if _, weak := knownWeakValues[strings.ToLower(secret)]; weak {
-		return fmt.Errorf("public placeholder values are not allowed")
+	for _, indicator := range weakIndicators {
+		if strings.Contains(lowerSecret, indicator) {
+			return fmt.Errorf("must not use a known placeholder value")
+		}
 	}
+
 	uniqueBytes := make(map[byte]struct{})
-	for i := 0; i < len(secret); i++ {
+	for i := range len(secret) {
 		uniqueBytes[secret[i]] = struct{}{}
 	}
 	if len(uniqueBytes) < 10 {
-		return fmt.Errorf("value has insufficient character diversity")
+		return fmt.Errorf("must use a stronger random value")
 	}
 	return nil
+}
+
+func initUserSessionSettings() {
+	UserSessionActiveLimit = positiveUserSessionEnv("USER_SESSION_ACTIVE_LIMIT", DefaultUserSessionActiveLimit)
+	UserSessionIssuanceLimit = positiveUserSessionEnv("USER_SESSION_ISSUANCE_LIMIT", DefaultUserSessionIssuanceLimit)
+	UserSessionIssuanceWindowSeconds = int64(positiveUserSessionEnv("USER_SESSION_ISSUANCE_WINDOW_SECONDS", DefaultUserSessionIssuanceWindowSeconds))
+	UserSessionRevokedRetentionDays = positiveUserSessionEnv("USER_SESSION_REVOKED_RETENTION_DAYS", DefaultUserSessionRevokedRetentionDays)
+	UserSessionHourlyAlertThreshold = positiveUserSessionEnv("USER_SESSION_HOURLY_ALERT_THRESHOLD", DefaultUserSessionHourlyAlertThreshold)
+
+	const secondsPerDay = 24 * 60 * 60
+	if int64(UserSessionRevokedRetentionDays) > math.MaxInt64/secondsPerDay {
+		SysError(fmt.Sprintf(
+			"USER_SESSION_REVOKED_RETENTION_DAYS is too large, using default value: %d",
+			DefaultUserSessionRevokedRetentionDays,
+		))
+		UserSessionRevokedRetentionDays = DefaultUserSessionRevokedRetentionDays
+	}
+	retentionSeconds := int64(UserSessionRevokedRetentionDays) * secondsPerDay
+	if UserSessionIssuanceWindowSeconds > retentionSeconds {
+		configuredWindow := UserSessionIssuanceWindowSeconds
+		UserSessionIssuanceWindowSeconds = retentionSeconds
+		SysError(fmt.Sprintf(
+			"USER_SESSION_ISSUANCE_WINDOW_SECONDS exceeds revoked retention; configured_window_seconds=%d revoked_retention_seconds=%d effective_window_seconds=%d",
+			configuredWindow,
+			retentionSeconds,
+			UserSessionIssuanceWindowSeconds,
+		))
+	}
+}
+
+func positiveUserSessionEnv(name string, fallback int) int {
+	value := GetEnvOrDefault(name, fallback)
+	if value <= 0 {
+		SysError(fmt.Sprintf("%s must be positive, using default value: %d", name, fallback))
+		return fallback
+	}
+	return value
 }
 
 func initConstantEnv() {
@@ -163,12 +215,14 @@ func initConstantEnv() {
 	constant.StreamScannerMaxBufferMB = GetEnvOrDefault("STREAM_SCANNER_MAX_BUFFER_MB", 128)
 	// MaxRequestBodyMB 请求体最大大小（解压后），用于防止超大请求/zip bomb导致内存暴涨
 	constant.MaxRequestBodyMB = GetEnvOrDefault("MAX_REQUEST_BODY_MB", 128)
+	constant.AnonymousRequestBodyLimitKB = GetEnvOrDefault("ANONYMOUS_REQUEST_BODY_LIMIT_KB", 512)
 	// ForceStreamOption 覆盖请求参数，强制返回usage信息
 	constant.ForceStreamOption = GetEnvOrDefaultBool("FORCE_STREAM_OPTION", true)
 	constant.CountToken = GetEnvOrDefaultBool("CountToken", true)
 	constant.GetMediaToken = GetEnvOrDefaultBool("GET_MEDIA_TOKEN", true)
 	constant.GetMediaTokenNotStream = GetEnvOrDefaultBool("GET_MEDIA_TOKEN_NOT_STREAM", false)
 	constant.UpdateTask = GetEnvOrDefaultBool("UPDATE_TASK", true)
+	constant.TaskPluginEnabled = GetEnvOrDefaultBool("TASK_PLUGIN_ENABLED", true)
 	constant.AzureDefaultAPIVersion = GetEnvOrDefaultString("AZURE_DEFAULT_API_VERSION", "2025-04-01-preview")
 	constant.NotifyLimitCount = GetEnvOrDefault("NOTIFY_LIMIT_COUNT", 2)
 	constant.NotificationLimitDurationMinute = GetEnvOrDefault("NOTIFICATION_LIMIT_DURATION_MINUTE", 10)
@@ -180,12 +234,20 @@ func initConstantEnv() {
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
 	// 异步任务超时时间（分钟），超过此时间未完成的任务将被标记为失败并退款。0 表示禁用。
 	constant.TaskTimeoutMinutes = GetEnvOrDefault("TASK_TIMEOUT_MINUTES", 1440)
+	// Consecutive unrecognized/transient poll failures before the task is failed and refunded.
+	constant.TaskPollMaxFailures = GetEnvOrDefault("TASK_POLL_MAX_FAILURES", 20)
+	// 声明式任务协议桥只观察数据库；这些值控制一次客户端观察连接，
+	// 不改变后台轮询或结算生命周期。
+	constant.TaskPluginProtocolTimeoutSeconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_TIMEOUT_SECONDS", 600)
+	constant.TaskPluginProtocolTickMilliseconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_TICK_MILLISECONDS", 2000)
+	constant.TaskPluginProtocolTickJitterMilliseconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_TICK_JITTER_MILLISECONDS", 500)
+	constant.TaskPluginProtocolHeartbeatSeconds = GetEnvOrDefault("TASK_PLUGIN_PROTOCOL_HEARTBEAT_SECONDS", 15)
 
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {
 		var taskPricePatches []string
-		soraPatches := strings.Split(soraPatchStr, ",")
-		for _, patch := range soraPatches {
+		soraPatches := strings.SplitSeq(soraPatchStr, ",")
+		for patch := range soraPatches {
 			trimmedPatch := strings.TrimSpace(patch)
 			if trimmedPatch != "" {
 				taskPricePatches = append(taskPricePatches, trimmedPatch)
@@ -197,8 +259,8 @@ func initConstantEnv() {
 	// Initialize trusted redirect domains for URL validation
 	trustedDomainsStr := GetEnvOrDefaultString("TRUSTED_REDIRECT_DOMAINS", "")
 	var trustedDomains []string
-	domains := strings.Split(trustedDomainsStr, ",")
-	for _, domain := range domains {
+	domains := strings.SplitSeq(trustedDomainsStr, ",")
+	for domain := range domains {
 		trimmedDomain := strings.TrimSpace(domain)
 		if trimmedDomain != "" {
 			// Normalize domain to lowercase

@@ -1,5 +1,6 @@
 .github
 .git
+.env.production
 *.md
 .vscode
 .gitignore
@@ -8,8 +9,5 @@ docs
 .eslintcache
 .gocache
 /web/node_modules
-/web/default/node_modules
-/web/default/dist
-/web/classic/node_modules
-/web/classic/dist
+/web/dist
 !THIRD-PARTY-LICENSES.md

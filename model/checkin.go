@@ -3,21 +3,27 @@ package model
 import (
 	"errors"
 	"math/rand"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 )
 
+// Checkin 签到记录
 type Checkin struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId       int    `json:"user_id" gorm:"not null;uniqueIndex:idx_user_checkin_date"`
-	CheckinDate  string `json:"checkin_date" gorm:"type:varchar(10);not null;uniqueIndex:idx_user_checkin_date"`
+	CheckinDate  string `json:"checkin_date" gorm:"type:varchar(10);not null;uniqueIndex:idx_user_checkin_date"` // 格式: YYYY-MM-DD
 	QuotaAwarded int    `json:"quota_awarded" gorm:"not null"`
 	CreatedAt    int64  `json:"created_at" gorm:"bigint"`
 }
 
+// CheckinRecord 用于API返回的签到记录（不包含敏感字段）
 type CheckinRecord struct {
 	CheckinDate  string `json:"checkin_date"`
 	QuotaAwarded int    `json:"quota_awarded"`
@@ -27,6 +33,7 @@ func (Checkin) TableName() string {
 	return "checkins"
 }
 
+// GetUserCheckinRecords 获取用户在指定日期范围内的签到记录
 func GetUserCheckinRecords(userId int, startDate, endDate string) ([]Checkin, error) {
 	var records []Checkin
 	err := DB.Where("user_id = ? AND checkin_date >= ? AND checkin_date <= ?",
@@ -36,6 +43,7 @@ func GetUserCheckinRecords(userId int, startDate, endDate string) ([]Checkin, er
 	return records, err
 }
 
+// HasCheckedInToday 检查用户今天是否已签到
 func HasCheckedInToday(userId int) (bool, error) {
 	today := time.Now().Format("2006-01-02")
 	var count int64
@@ -45,112 +53,20 @@ func HasCheckedInToday(userId int) (bool, error) {
 	return count > 0, err
 }
 
-func getPreviousDayTimeRange() (int64, int64) {
-	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	yesterdayStart := todayStart.AddDate(0, 0, -1)
-	return yesterdayStart.Unix(), todayStart.Unix()
-}
-
-func GetPreviousDayConsumeRequestCount(userId int) (int64, error) {
-	yesterdayStart, todayStart := getPreviousDayTimeRange()
-
-	var count int64
-	err := LOG_DB.Model(&Log{}).
-		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
-			userId, LogTypeConsume, yesterdayStart, todayStart).
-		Count(&count).Error
-	return count, err
-}
-
-func GetPreviousDayConsumeQuota(userId int) (int64, error) {
-	yesterdayStart, todayStart := getPreviousDayTimeRange()
-
-	var quota int64
-	err := LOG_DB.Model(&Log{}).
-		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
-			userId, LogTypeConsume, yesterdayStart, todayStart).
-		Select("COALESCE(SUM(quota), 0)").
-		Scan(&quota).Error
-	return quota, err
-}
-
-func HasUserRedeemedSingleQuotaAtLeast(userId int, minQuota int) (bool, error) {
-	var count int64
-	err := DB.Unscoped().Model(&Redemption{}).
-		Where("used_user_id = ? AND status = ? AND quota >= ?", userId, common.RedemptionCodeStatusUsed, minQuota).
-		Count(&count).Error
-	return count > 0, err
-}
-
-type checkinRewardRange struct {
-	min    int
-	max    int
-	weight int
-}
-
-func randomCheckinQuota(minQuota, maxQuota int) int {
-	if maxQuota <= minQuota {
-		return minQuota
-	}
-	return minQuota + rand.Intn(maxQuota-minQuota+1)
-}
-
-// Select a weighted reward while keeping every result inside the already-capped range.
-func weightedCheckinQuota(minQuota, maxQuota int) int {
-	if maxQuota <= minQuota {
-		return minQuota
-	}
-
-	lowRangeEnd := maxQuota * 6 / 10
-	highRangeStart := (maxQuota*9 + 9) / 10
-	ranges := make([]checkinRewardRange, 0, 3)
-	addRange := func(rangeMin, rangeMax, weight int) {
-		if rangeMin < minQuota {
-			rangeMin = minQuota
-		}
-		if rangeMax > maxQuota {
-			rangeMax = maxQuota
-		}
-		if rangeMin <= rangeMax {
-			ranges = append(ranges, checkinRewardRange{
-				min:    rangeMin,
-				max:    rangeMax,
-				weight: weight,
-			})
-		}
-	}
-
-	// The three ranges are [5, 30), [30, 45), and [45, max] when max is 50.
-	addRange(minQuota, lowRangeEnd-1, 85)
-	addRange(lowRangeEnd, highRangeStart-1, 14)
-	addRange(highRangeStart, maxQuota, 1)
-
-	totalWeight := 0
-	for _, rewardRange := range ranges {
-		totalWeight += rewardRange.weight
-	}
-	if totalWeight == 0 {
-		return randomCheckinQuota(minQuota, maxQuota)
-	}
-
-	roll := rand.Intn(totalWeight)
-	for _, rewardRange := range ranges {
-		if roll < rewardRange.weight {
-			return randomCheckinQuota(rewardRange.min, rewardRange.max)
-		}
-		roll -= rewardRange.weight
-	}
-
-	return ranges[len(ranges)-1].max
-}
-
+// UserCheckin 执行用户签到
+// MySQL 和 PostgreSQL 使用事务保证原子性
+// SQLite 不支持嵌套事务，使用顺序操作 + 手动回滚
 func UserCheckin(userId int) (*Checkin, error) {
-	setting := operation_setting.GetCheckinSetting()
+	// A consistent snapshot also prevents a concurrent settings save from
+	// mixing old reward bounds with new tier thresholds.
+	common.OptionMapRWMutex.RLock()
+	setting := *operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RUnlock()
 	if !setting.Enabled {
 		return nil, errors.New("签到功能未启用")
 	}
 
+	// 检查今天是否已签到
 	hasChecked, err := HasCheckedInToday(userId)
 	if err != nil {
 		return nil, err
@@ -159,120 +75,150 @@ func UserCheckin(userId int) (*Checkin, error) {
 		return nil, errors.New("今日已签到")
 	}
 
-	if setting.MinPreviousDayRequests > 0 {
-		previousDayRequests, err := GetPreviousDayConsumeRequestCount(userId)
-		if err != nil {
-			return nil, err
-		}
-		if previousDayRequests < int64(setting.MinPreviousDayRequests) {
-			return nil, errors.New("未达到签到要求")
-		}
+	if err := setting.Validate(); err != nil {
+		return nil, err
 	}
-
-	if setting.MinSingleRedemptionQuota > 0 {
-		qualified, err := HasUserRedeemedSingleQuotaAtLeast(userId, setting.MinSingleRedemptionQuota)
-		if err != nil {
-			return nil, err
-		}
-		if !qualified {
-			return nil, errors.New("未达到签到要求")
-		}
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	var consumption struct {
+		Requests int64
+		Quota    int64
 	}
-
-	previousDayQuota, err := GetPreviousDayConsumeQuota(userId)
+	err = LOG_DB.Model(&Log{}).
+		Where("user_id = ? AND type = ? AND created_at >= ? AND created_at < ?",
+			userId, LogTypeConsume, todayStart.AddDate(0, 0, -1).Unix(), todayStart.Unix()).
+		Select("COUNT(*) AS requests, COALESCE(SUM(quota), 0) AS quota").
+		Scan(&consumption).Error
 	if err != nil {
 		return nil, err
 	}
-	if previousDayQuota <= int64(setting.MinQuota) {
-		return nil, errors.New("未达到签到要求")
+	if consumption.Requests < int64(setting.MinPreviousDayRequests) {
+		return nil, errors.New("昨日请求次数不足，未达到签到要求")
+	}
+	if setting.MinSingleRedemptionQuota > 0 {
+		var count int64
+		err = DB.Unscoped().Model(&Redemption{}).
+			Where("used_user_id = ? AND status = ? AND quota >= ?",
+				userId, common.RedemptionCodeStatusUsed, setting.MinSingleRedemptionQuota).
+			Count(&count).Error
+		if err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			return nil, errors.New("未使用过达到最低额度要求的兑换码")
+		}
+	}
+	quotaAwarded, err := setting.Reward(consumption.Quota, rand.Intn)
+	if err != nil {
+		return nil, err
 	}
 
-	minQuota := setting.MinQuota
-	maxQuota := setting.MaxQuota
-	previousDayQuotaLimit := int(previousDayQuota / 2)
-	if previousDayQuotaLimit < maxQuota {
-		maxQuota = previousDayQuotaLimit
-	}
-	if maxQuota < minQuota {
-		return nil, errors.New("未达到签到要求")
-	}
-	last10PercentConsumeQuota := operation_setting.GetLast10PercentConsumeQuota()
-	tierMatched := false
-	if setting.MaxQuota > 0 && last10PercentConsumeQuota > 0 &&
-		previousDayQuota >= int64(last10PercentConsumeQuota) {
-		tierMin := (setting.MaxQuota*9 + 9) / 10
-		if tierMin < minQuota {
-			tierMin = minQuota
-		}
-		tierMax := maxQuota
-		if tierMax > setting.MaxQuota {
-			tierMax = setting.MaxQuota
-		}
-		if tierMax >= tierMin {
-			minQuota = tierMin
-			maxQuota = tierMax
-			tierMatched = true
-		}
-	} else if setting.MaxQuota > 0 &&
-		setting.TwentyToTenPercentConsumeQuota > 0 &&
-		setting.TwentyToTenPercentConsumeQuota < last10PercentConsumeQuota &&
-		previousDayQuota >= int64(setting.TwentyToTenPercentConsumeQuota) {
-		tierMin := (setting.MaxQuota*8 + 9) / 10
-		if tierMin < minQuota {
-			tierMin = minQuota
-		}
-		tierMax := (setting.MaxQuota*9+9)/10 - 1
-		if tierMax > maxQuota {
-			tierMax = maxQuota
-		}
-		if tierMax >= tierMin {
-			minQuota = tierMin
-			maxQuota = tierMax
-			tierMatched = true
-		}
-	}
-
-	quotaAwarded := minQuota
-	if tierMatched {
-		quotaAwarded = randomCheckinQuota(minQuota, maxQuota)
-	} else {
-		// Below twice the maximum reward, keep ordinary rewards within 60% of the maximum.
-		fullRangeThreshold := int64(setting.MaxQuota) * 2
-		if previousDayQuota < fullRangeThreshold {
-			lowRewardMax := setting.MaxQuota * 6 / 10
-			if lowRewardMax < maxQuota {
-				maxQuota = lowRewardMax
-			}
-			if maxQuota < minQuota {
-				return nil, errors.New("未达到签到要求")
-			}
-			quotaAwarded = randomCheckinQuota(minQuota, maxQuota)
-		} else {
-			quotaAwarded = weightedCheckinQuota(minQuota, maxQuota)
-		}
-	}
-
-	today := time.Now().Format("2006-01-02")
+	today := now.Format("2006-01-02")
 	checkin := &Checkin{
 		UserId:       userId,
 		CheckinDate:  today,
 		QuotaAwarded: quotaAwarded,
-		CreatedAt:    time.Now().Unix(),
+		CreatedAt:    now.Unix(),
 	}
 
-	if common.UsingSQLite {
+	// 根据数据库类型选择不同的策略
+	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
+		// SQLite 不支持嵌套事务，使用顺序操作 + 手动回滚
 		return userCheckinWithoutTransaction(checkin, userId, quotaAwarded)
 	}
 
+	// MySQL 和 PostgreSQL 支持事务，使用事务保证原子性
 	return userCheckinWithTransaction(checkin, userId, quotaAwarded)
 }
 
+var checkinSettingsMutex sync.Mutex
+
+// Save the entire validated configuration in one transaction. Keep the
+// existing dotted option keys so stored settings survive official updates.
+func UpdateCheckinOptions(values map[string]string) error {
+	checkinSettingsMutex.Lock()
+	defer checkinSettingsMutex.Unlock()
+	common.OptionMapRWMutex.RLock()
+	next := *operation_setting.GetCheckinSetting()
+	common.OptionMapRWMutex.RUnlock()
+	for key, value := range values {
+		switch key {
+		case "checkin_setting":
+			if err := common.UnmarshalJsonStr(value, &next); err != nil {
+				return errors.New("签到设置格式无效")
+			}
+		case "checkin_setting.enabled":
+			if value != "true" && value != "false" {
+				return errors.New("签到开关必须为true或false")
+			}
+			next.Enabled = value == "true"
+		default:
+			// Decode each known field strictly; reject fractional numbers and
+			// unknown option keys rather than silently truncating/ignoring them.
+			field := strings.TrimPrefix(key, "checkin_setting.")
+			switch field {
+			case "min_quota", "max_quota", "min_previous_day_requests",
+				"min_single_redemption_quota", "last_10_percent_consume_quota",
+				"twenty_to_ten_percent_consume_quota":
+				number, err := strconv.Atoi(value)
+				if err != nil {
+					return errors.New("签到额度和门槛必须为整数")
+				}
+				if err := common.UnmarshalJsonStr("{\""+field+"\":"+strconv.Itoa(number)+"}", &next); err != nil {
+					return err
+				}
+			default:
+				return errors.New("未知的签到配置项")
+			}
+		}
+	}
+	// Disabling remains possible even when legacy saved settings are invalid.
+	if next.Enabled {
+		if err := next.Validate(); err != nil {
+			return err
+		}
+	}
+	fields, err := config.ConfigToMap(next)
+	if err != nil {
+		return err
+	}
+	if err := DB.Transaction(func(tx *gorm.DB) error {
+		for key, value := range fields {
+			option := Option{Key: "checkin_setting." + key}
+			if err := tx.FirstOrCreate(&option, Option{Key: option.Key}).Error; err != nil {
+				return err
+			}
+			option.Value = value
+			if err := tx.Save(&option).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	common.OptionMapRWMutex.Lock()
+	defer common.OptionMapRWMutex.Unlock()
+	if common.OptionMap == nil {
+		common.OptionMap = make(map[string]string)
+	}
+	for key, value := range fields {
+		common.OptionMap["checkin_setting."+key] = value
+	}
+	*operation_setting.GetCheckinSetting() = next
+	return nil
+}
+
+// userCheckinWithTransaction 使用事务执行签到（适用于 MySQL 和 PostgreSQL）
 func userCheckinWithTransaction(checkin *Checkin, userId int, quotaAwarded int) (*Checkin, error) {
 	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 步骤1: 创建签到记录
+		// 数据库有唯一约束 (user_id, checkin_date)，可以防止并发重复签到
 		if err := tx.Create(checkin).Error; err != nil {
 			return errors.New("签到失败，请稍后重试")
 		}
 
+		// 步骤2: 在事务中增加用户额度
 		if err := tx.Model(&User{}).Where("id = ?", userId).
 			Update("quota", gorm.Expr("quota + ?", quotaAwarded)).Error; err != nil {
 			return errors.New("签到失败：更新额度出错")
@@ -285,6 +231,7 @@ func userCheckinWithTransaction(checkin *Checkin, userId int, quotaAwarded int) 
 		return nil, err
 	}
 
+	// 事务成功后，异步更新缓存
 	go func() {
 		_ = cacheIncrUserQuota(userId, int64(quotaAwarded))
 	}()
@@ -292,12 +239,18 @@ func userCheckinWithTransaction(checkin *Checkin, userId int, quotaAwarded int) 
 	return checkin, nil
 }
 
+// userCheckinWithoutTransaction 不使用事务执行签到（适用于 SQLite）
 func userCheckinWithoutTransaction(checkin *Checkin, userId int, quotaAwarded int) (*Checkin, error) {
+	// 步骤1: 创建签到记录
+	// 数据库有唯一约束 (user_id, checkin_date)，可以防止并发重复签到
 	if err := DB.Create(checkin).Error; err != nil {
 		return nil, errors.New("签到失败，请稍后重试")
 	}
 
+	// 步骤2: 增加用户额度
+	// 使用 db=true 强制直接写入数据库，不使用批量更新
 	if err := IncreaseUserQuota(userId, quotaAwarded, true); err != nil {
+		// 如果增加额度失败，需要回滚签到记录
 		DB.Delete(checkin)
 		return nil, errors.New("签到失败：更新额度出错")
 	}
@@ -305,7 +258,9 @@ func userCheckinWithoutTransaction(checkin *Checkin, userId int, quotaAwarded in
 	return checkin, nil
 }
 
-func GetUserCheckinStats(userId int, month string) (map[string]interface{}, error) {
+// GetUserCheckinStats 获取用户签到统计信息
+func GetUserCheckinStats(userId int, month string) (map[string]any, error) {
+	// 获取指定月份的所有签到记录
 	startDate := month + "-01"
 	endDate := month + "-31"
 
@@ -314,6 +269,7 @@ func GetUserCheckinStats(userId int, month string) (map[string]interface{}, erro
 		return nil, err
 	}
 
+	// 转换为不包含敏感字段的记录
 	checkinRecords := make([]CheckinRecord, len(records))
 	for i, r := range records {
 		checkinRecords[i] = CheckinRecord{
@@ -322,18 +278,20 @@ func GetUserCheckinStats(userId int, month string) (map[string]interface{}, erro
 		}
 	}
 
+	// 检查今天是否已签到
 	hasCheckedToday, _ := HasCheckedInToday(userId)
 
+	// 获取用户所有时间的签到统计
 	var totalCheckins int64
 	var totalQuota int64
 	DB.Model(&Checkin{}).Where("user_id = ?", userId).Count(&totalCheckins)
 	DB.Model(&Checkin{}).Where("user_id = ?", userId).Select("COALESCE(SUM(quota_awarded), 0)").Scan(&totalQuota)
 
-	return map[string]interface{}{
-		"total_quota":      totalQuota,
-		"total_checkins":   totalCheckins,
-		"checkin_count":    len(records),
-		"checked_in_today": hasCheckedToday,
-		"records":          checkinRecords,
+	return map[string]any{
+		"total_quota":      totalQuota,      // 所有时间累计获得的额度
+		"total_checkins":   totalCheckins,   // 所有时间累计签到次数
+		"checkin_count":    len(records),    // 本月签到次数
+		"checked_in_today": hasCheckedToday, // 今天是否已签到
+		"records":          checkinRecords,  // 本月签到记录详情（不含id和user_id）
 	}, nil
 }
