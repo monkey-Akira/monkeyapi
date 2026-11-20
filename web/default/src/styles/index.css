@@ -97,15 +97,15 @@ For commercial licensing, please contact support@quantumnous.com
   z-index: 999999;
   display: none;
   pointer-events: none;
-  font-size: 28px;
-  line-height: 1;
+  width: 40px;
+  height: 33px;
+  background: url('../assets/banana-cursor.png') center / contain no-repeat;
   opacity: 0;
   transform: translate3d(
-      calc(var(--banana-cursor-x) + 4px),
-      calc(var(--banana-cursor-y) + 2px),
-      0
-    )
-    rotate(-18deg);
+    calc(var(--banana-cursor-x) - 4px),
+    calc(var(--banana-cursor-y) - 3px),
+    0
+  );
   transition: opacity 100ms ease;
   user-select: none;
   will-change: transform;

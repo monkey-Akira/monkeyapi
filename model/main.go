@@ -288,6 +288,9 @@ func migrateDB() error {
 	if err != nil {
 		return err
 	}
+	if err := migrateLegacyTokenCallLimits(DB); err != nil {
+		return err
+	}
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -359,6 +362,9 @@ func migrateDBFast() error {
 		if err != nil {
 			return err
 		}
+	}
+	if err := migrateLegacyTokenCallLimits(DB); err != nil {
+		return err
 	}
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {

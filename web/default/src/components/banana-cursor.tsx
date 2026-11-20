@@ -73,8 +73,6 @@ export function BananaCursor() {
       aria-hidden='true'
       className='banana-cursor'
       ref={cursorRef}
-    >
-      🍌
-    </div>
+    />
   )
 }
