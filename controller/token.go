@@ -35,6 +35,7 @@ func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 type tokenRequest struct {
 	model.Token
 	AutoGroups tokenAutoGroupsInput `json:"auto_groups"`
+	MinuteSuccessLimit *int `json:"minute_success_limit" binding:"omitempty,min=0"`
 }
 
 type tokenResponse struct {
@@ -329,7 +330,12 @@ func AddToken(c *gin.Context) {
 		common.SysLog("failed to generate token key: " + err.Error())
 		return
 	}
+	limit := 3
+	if request.MinuteSuccessLimit != nil {
+		limit = *request.MinuteSuccessLimit
+	}
 	cleanToken := model.Token{
+		MinuteSuccessLimit: limit,
 		UserId:             c.GetInt("id"),
 		Name:               token.Name,
 		Key:                key,
@@ -428,6 +434,7 @@ func UpdateToken(c *gin.Context) {
 	}
 	if statusOnly != "" {
 		cleanToken.Status = token.Status
+		err = cleanToken.UpdateCallGuardStatus()
 	} else {
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name
@@ -447,8 +454,8 @@ func UpdateToken(c *gin.Context) {
 				return
 			}
 		}
+		err = cleanToken.UpdateSettings(request.MinuteSuccessLimit)
 	}
-	err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -463,6 +470,7 @@ func UpdateToken(c *gin.Context) {
 			changed bool
 		}{
 			{"name", previous.Name != cleanToken.Name},
+			{"minute_success_limit", previous.MinuteSuccessLimit != cleanToken.MinuteSuccessLimit},
 			{"expired_time", previous.ExpiredTime != cleanToken.ExpiredTime},
 			{"remain_quota", previous.RemainQuota != cleanToken.RemainQuota},
 			{"unlimited_quota", previous.UnlimitedQuota != cleanToken.UnlimitedQuota},

@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "自動無効化のしきい値（回/分）",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "直近60秒の成功回数がこの値を超えると、手動で再び有効にするまでキーが無効になります。0は無制限です。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

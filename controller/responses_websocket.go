@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/relay"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,18 @@ var responsesWSRequestEngine = sync.OnceValue(func() *gin.Engine {
 		c.Next()
 	}, middleware.BodyStorageCleanup(), middleware.TokenAuth(), middleware.ModelRequestRateLimit(), func(c *gin.Context) {
 		state := c.Request.Context().Value(responsesWSRequestContextKey{}).(*responsesWSRequestState)
-		state.apiError = state.handle(c)
+		slot, guardErr := reserveKeyCall(c)
+		if guardErr != nil {
+			state.apiError = guardErr
+		} else {
+			state.apiError = state.handle(c)
+			status := c.Writer.Status()
+			if state.apiError != nil {
+				status = state.apiError.StatusCode
+			}
+			stream, _ := common.GetContextKeyType[*relaycommon.StreamStatus](c, constant.ContextKeyResponseStreamStatus)
+			finishKeyCall(c, slot, keyCallOutcome(status, stream))
+		}
 		if state.apiError != nil {
 			status := state.apiError.StatusCode
 			if status < http.StatusBadRequest {

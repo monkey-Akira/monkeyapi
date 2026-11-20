@@ -2,6 +2,10 @@
 
 DO NOT send optional commentary
 
+## 项目须知 · 本地验证
+
+本项目的本地工作区没有验证环境。日常开发默认跳过本地构建、测试、启动服务和数据库验证，也无需为此安装工具或申请运行权限。本文及子目录所列的验证步骤供具备相应环境时使用。交付时如实注明实际执行情况。
+
 ## Mandatory Local Branch Policy
 
 - Read ../AGENTS.md and .codex-notes/current-task.md before any work.

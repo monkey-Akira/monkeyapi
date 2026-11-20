@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "Порог отключения (вызовов в минуту)",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "Если за 60 секунд число успешных вызовов превысит порог, ключ отключится до ручного включения. Введите 0 для снятия ограничения.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

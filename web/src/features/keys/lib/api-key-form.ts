@@ -44,6 +44,7 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       auto_groups_mode: z.enum(['inherit', 'custom']),
       auto_groups: z.array(z.string()),
       cross_group_retry: z.boolean().optional(),
+      minute_success_limit: z.number().int().nonnegative(),
       tokenCount: z.number().min(1).optional(),
     })
     .superRefine((data, ctx) => {
@@ -105,6 +106,7 @@ export type ApiKeyFormValues = z.infer<ReturnType<typeof getApiKeyFormSchema>>
 
 export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   name: '',
+  minute_success_limit: 3,
   remain_quota_dollars: 10,
   expired_time: undefined,
   unlimited_quota: true,
@@ -141,6 +143,7 @@ export function transformFormDataToPayload(
 ): ApiKeyFormData {
   return {
     name: data.name,
+    minute_success_limit: data.minute_success_limit,
     remain_quota: data.unlimited_quota
       ? 0
       : parseQuotaFromDollars(data.remain_quota_dollars || 0),
@@ -177,6 +180,7 @@ export function transformApiKeyToFormDefaults(
 
   return {
     name: apiKey.name,
+    minute_success_limit: apiKey.minute_success_limit ?? 0,
     remain_quota_dollars: apiKey.unlimited_quota
       ? 0
       : quotaUnitsToDollars(apiKey.remain_quota),

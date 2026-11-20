@@ -418,6 +418,30 @@ export function ApiKeysMutateDrawer({
 
               <FormField
                 control={form.control}
+                name='minute_success_limit'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Auto-disable threshold (calls per minute)')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        min={0}
+                        step={1}
+                        value={Number.isFinite(field.value) ? field.value : ''}
+                        onChange={(event) => field.onChange(event.target.valueAsNumber)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name='group'
                 render={({ field }) => (
                   <FormItem>

@@ -1,5 +1,7 @@
 {
   "translation": {
+    "Auto-disable threshold (calls per minute)": "自动停用阈值（次/分钟）",
+    "Exceeding this many successful calls in 60 seconds disables this key until you enable it again. Enter 0 for no limit.": "最近 60 秒内成功调用超过此次数，Key 会自动停用，需手动启用。填 0 表示不限。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

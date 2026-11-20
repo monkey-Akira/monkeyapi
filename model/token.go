@@ -29,6 +29,7 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
+	MinuteSuccessLimit int            `json:"minute_success_limit" gorm:"default:0"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -307,13 +308,30 @@ func (token *Token) Insert() error {
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
-func (token *Token) Update() (err error) {
+func (token *Token) Update() error {
+	return token.UpdateSettings(nil)
+}
+
+func (token *Token) UpdateSettings(limit *int) error {
 	// 写库前失效缓存并设置 fence，防止并发读者把过期快照重新写回缓存。
 	if cacheErr := invalidateTokenCacheForMutation(token.Key); cacheErr != nil {
 		common.SysLog("failed to invalidate token cache before update: " + cacheErr.Error())
 	}
-	return DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups").Updates(token).Error
+	fields := []string{"name", "expired_time", "remain_quota", "unlimited_quota",
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry", "auto_groups"}
+	if limit == nil {
+		return DB.Model(token).Select(fields).Updates(token).Error
+	}
+	token.MinuteSuccessLimit = *limit
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(token).Select(append(fields, "minute_success_limit")).Updates(token).Error; err != nil {
+			return err
+		}
+		if *limit == 0 {
+			return tx.Where("token_id = ?", token.Id).Delete(&TokenCallSlot{}).Error
+		}
+		return nil
+	})
 }
 
 func (token *Token) SelectUpdate() (err error) {
