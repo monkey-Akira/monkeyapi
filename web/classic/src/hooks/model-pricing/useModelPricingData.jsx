@@ -178,9 +178,9 @@ export const useModelPricingData = () => {
     [selectedRowKeys],
   );
 
-  const displayPrice = (usdPrice) => {
+  const displayPrice = (usdPrice, applyRecharge = true) => {
     let priceInUSD = usdPrice;
-    if (showWithRecharge) {
+    if (applyRecharge && showWithRecharge) {
       priceInUSD = (usdPrice * priceRate) / usdExchangeRate;
     }
 

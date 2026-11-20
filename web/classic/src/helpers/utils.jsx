@@ -750,7 +750,7 @@ export const calculateModelPrice = ({
   if (record.quota_type === 1) {
     // 按次计费
     const priceUSD = parseFloat(record.model_price) * usedGroupRatio;
-    const displayVal = displayPrice(priceUSD);
+    const displayVal = displayPrice(priceUSD, false);
 
     return {
       price: displayVal,
