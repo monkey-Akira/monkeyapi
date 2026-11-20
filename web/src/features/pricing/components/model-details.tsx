@@ -71,7 +71,7 @@ import { usePricingData } from '../hooks/use-pricing-data'
 import type { ParsedTaskTier } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
 import {
-  formatTaskUsageUnitPrice,
+  formatTaskExamplePrice,
   getDynamicPriceEntries,
   getDynamicPriceUnitLabelKey,
   getDynamicPricingSummary,
@@ -857,9 +857,6 @@ function PriceSection(props: {
             {formatFixedPrice(
               props.model,
               baseGroupKey,
-              props.showRechargePrice,
-              props.priceRate,
-              props.usdExchangeRate,
               baseGroupRatioMap
             )}
           </span>
@@ -1316,7 +1313,7 @@ function ProviderGroupPricingSection(
                           className: `${thClass} text-right`,
                           cellClassName: 'py-2.5 text-right font-mono',
                           cell: (row) =>
-                            `≈ ${formatTaskUsageUnitPrice(row.total, {
+                            `≈ ${formatTaskExamplePrice(row.total, row.tokenTotal, {
                               tokenUnit: props.tokenUnit,
                               showRechargePrice,
                               priceRate: props.priceRate,
@@ -1373,9 +1370,6 @@ function ProviderGroupPricingSection(
     formatFixedPrice(
       props.model,
       group,
-      showRechargePrice,
-      props.priceRate,
-      props.usdExchangeRate,
       props.groupRatio
     )
 

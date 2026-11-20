@@ -222,9 +222,6 @@ export function ModelPriceCell(props: {
           label: t('Per-request'),
           value: formatRequestPrice(
             props.model,
-            options.showRechargePrice,
-            options.priceRate,
-            options.usdExchangeRate,
             options.selectedGroup,
             false
           ),

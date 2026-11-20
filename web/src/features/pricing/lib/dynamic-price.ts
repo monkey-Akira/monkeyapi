@@ -227,15 +227,7 @@ export function formatTaskUsageUnitPrice(
   options: DynamicPriceOptions
 ): string {
   const groupRatio = options.groupRatioMultiplier ?? 1
-  const priceRate = options.priceRate ?? 1
-  const usdExchangeRate = options.usdExchangeRate ?? 1
-  const priceUSD = valuePerUnit * groupRatio
-  const displayPrice = applyRechargeRate(
-    priceUSD,
-    options.showRechargePrice ?? false,
-    priceRate,
-    usdExchangeRate
-  )
+  const displayPrice = valuePerUnit * groupRatio
 
   return formatBillingCurrencyFromUSD(displayPrice, {
     showSymbol: options.showCurrencySymbol ?? true,
@@ -243,6 +235,34 @@ export function formatTaskUsageUnitPrice(
     digitsSmall: 6,
     abbreviate: false,
   })
+}
+
+function formatEntryPrice(
+  value: number,
+  unit: DynamicPriceEntry['unit'],
+  options: DynamicPriceOptions,
+  schemaUnit = false
+): string {
+  if (unit !== 'token') return formatTaskUsageUnitPrice(value, options)
+  // Task schemas quote a million tokens even when chat prices use thousands.
+  return formatDynamicUnitPrice(value, schemaUnit ? { ...options, tokenUnit: 'M' } : options)
+}
+
+export function formatTaskExamplePrice(
+  total: number,
+  tokenTotal: number,
+  options: DynamicPriceOptions
+): string {
+  if (!options.showRechargePrice || tokenTotal === 0) {
+    return formatTaskUsageUnitPrice(total, options)
+  }
+  const adjustedTokens = applyRechargeRate(
+    tokenTotal,
+    true,
+    options.priceRate ?? 1,
+    options.usdExchangeRate ?? 1
+  )
+  return formatTaskUsageUnitPrice(total - tokenTotal + adjustedTokens, options)
 }
 
 export function getDynamicPricingTiers(
@@ -316,7 +336,7 @@ export function getDynamicPriceEntries(
           shortLabel: field,
           labelKind: 'schema',
           value,
-          formatted: formatTaskUsageUnitPrice(value, options),
+          formatted: formatEntryPrice(value, definition.unit, options, true),
           unit: definition.unit,
           unitLabel: definition.unitLabel,
           description: definition.description,
@@ -444,11 +464,11 @@ export function getDynamicPricingSummary(
       value: min,
       minValue: min,
       maxValue: max,
-      formatted: formatTaskUsageUnitPrice(min, options),
+      formatted: formatEntryPrice(min, entry.unit, options, entry.labelKind === 'schema'),
       formattedRange:
         min === max
           ? undefined
-          : `${formatTaskUsageUnitPrice(min, options)} – ${formatTaskUsageUnitPrice(max, options)}`,
+          : `${formatEntryPrice(min, entry.unit, options, entry.labelKind === 'schema')} – ${formatEntryPrice(max, entry.unit, options, entry.labelKind === 'schema')}`,
     }))
     const primaryKeys = new Set(
       summaries.flatMap((summary) =>
@@ -552,7 +572,7 @@ export function getDynamicPricingSummary(
         formattedRange:
           range.min === range.max
             ? undefined
-            : `${formatTaskUsageUnitPrice(range.min, options)} – ${formatTaskUsageUnitPrice(range.max, options)}`,
+            : `${formatEntryPrice(range.min, entry.unit, options, entry.labelKind === 'schema')} – ${formatEntryPrice(range.max, entry.unit, options, entry.labelKind === 'schema')}`,
       }
     })
   }
@@ -620,6 +640,6 @@ export function getCardExamplePrice(
 
   return {
     label: firstExample.label,
-    formatted: formatTaskUsageUnitPrice(result.total, options),
+    formatted: formatTaskExamplePrice(result.total, result.tokenTotal, options),
   }
 }

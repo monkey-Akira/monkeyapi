@@ -49,6 +49,7 @@ import { formatBillingCondition } from '../lib/billing-expression/condition-disp
 import { compileBillingExpression } from '../lib/billing-expression/parser'
 import { isBreakdownTierMatched } from '../lib/breakdown-tier-match'
 import {
+  formatDynamicUnitPrice,
   formatTaskUsageUnitPrice,
   type DynamicPriceLabelKind,
   type DynamicPriceOptions,
@@ -203,12 +204,15 @@ function formatBreakdownPrice(
   taskPriceOptions: DynamicPricingBreakdownProps['taskPriceOptions'],
   language: string
 ): string {
-  const amount =
-    field.labelKind === 'schema' ||
-    field.unit === 'request' ||
-    field.unit === 'image'
-      ? formatTaskUsageUnitPrice(value, { tokenUnit: 'M', ...taskPriceOptions })
-      : `${symbol}${(value * rate).toFixed(4)}`
+  const options = { tokenUnit: 'M' as const, ...taskPriceOptions }
+  let amount: string
+  if (field.unit === 'token' && (field.labelKind === 'schema' || taskPriceOptions?.showRechargePrice)) {
+    amount = formatDynamicUnitPrice(value, options)
+  } else if (field.unit === 'token') {
+    amount = `${symbol}${(value * rate).toFixed(4)}`
+  } else {
+    amount = formatTaskUsageUnitPrice(value, options)
+  }
   if (field.unit === 'second') return `${amount}/${t('s')}`
   if (field.unit === 'count') {
     return `${amount}/${taskUsageUnitLabel(field, language, t('unit'))}`

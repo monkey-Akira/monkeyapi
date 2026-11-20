@@ -58,6 +58,7 @@ export type TaskMatrixConfig = {
 export type TaskPreviewResult = {
   tier: TaskVisualTier
   total: number
+  tokenTotal: number
   parts: {
     kind: 'constant' | 'usage'
     field?: string
@@ -283,23 +284,28 @@ export function evaluateTaskVisualConfig(
     { usage: normalizedUsage }
   )
   if (result.status !== 'success') return null
-  return { tier: matchedTier, total: result.cost, parts }
+  const tokenTotal = parts.reduce(
+    (sum, part) =>
+      part.field && schema?.[part.field]?.unit === 'token' ? sum + part.amount : sum,
+    0
+  )
+  return { tier: matchedTier, total: result.cost, tokenTotal, parts }
 }
 
 export function evaluateTaskUsageExamples(
   expression: string | null | undefined,
   schema: BillingUsageSchema | null | undefined,
   examples: BillingUsageExample[] | null | undefined
-): { label: string; total: number }[] {
+): { label: string; total: number; tokenTotal: number }[] {
   if (!expression || !schema || !examples?.length) return []
   const { billingExpr } = splitBillingExprAndRequestRules(expression)
   const config = tryParseTaskVisualConfig(billingExpr, schema)
   if (!config) return []
-  const rows: { label: string; total: number }[] = []
+  const rows: { label: string; total: number; tokenTotal: number }[] = []
   for (const example of examples) {
     const result = evaluateTaskVisualConfig(config, example.facts, schema)
     if (!result) continue
-    rows.push({ label: example.label, total: result.total })
+    rows.push({ label: example.label, total: result.total, tokenTotal: result.tokenTotal })
   }
   return rows
 }

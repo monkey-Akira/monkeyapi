@@ -215,9 +215,6 @@ export function formatGroupPrice(
 export function formatFixedPrice(
   model: PricingModel,
   group: string,
-  showWithRecharge = false,
-  priceRate = 1,
-  usdExchangeRate = 1,
   groupRatio: Record<string, number>
 ): string {
   if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
@@ -225,14 +222,7 @@ export function formatFixedPrice(
   }
 
   const ratio = getConfiguredGroupRatio(groupRatio, group)
-  let priceInUSD = (model.model_price || 0) * ratio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
-    showWithRecharge,
-    priceRate,
-    usdExchangeRate
-  )
+  const priceInUSD = (model.model_price || 0) * ratio
 
   return formatBillingCurrencyFromUSD(priceInUSD, {
     digitsLarge: 4,
@@ -246,9 +236,6 @@ export function formatFixedPrice(
  */
 export function formatRequestPrice(
   model: PricingModel,
-  showWithRecharge = false,
-  priceRate = 1,
-  usdExchangeRate = 1,
   selectedGroup?: string,
   showCurrencySymbol = true
 ): string {
@@ -258,14 +245,7 @@ export function formatRequestPrice(
 
   const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
 
-  let priceInUSD = (model.model_price || 0) * displayGroupRatio
-
-  priceInUSD = applyRechargeRate(
-    priceInUSD,
-    showWithRecharge,
-    priceRate,
-    usdExchangeRate
-  )
+  const priceInUSD = (model.model_price || 0) * displayGroupRatio
 
   return formatBillingCurrencyFromUSD(priceInUSD, {
     showSymbol: showCurrencySymbol,

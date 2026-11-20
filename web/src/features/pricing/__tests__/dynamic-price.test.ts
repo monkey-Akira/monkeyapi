@@ -66,6 +66,11 @@ describe('expression price summaries', () => {
     const request = thousand?.primaryEntries.find(
       (entry) => entry.unit === 'request'
     )
+    const adjusted = getDynamicPricingSummary(model, { ...summaryOptions, groupRatioMultiplier: 1 })
+    expect(adjusted?.primaryEntries.find((entry) => entry.unit === 'request')?.formatted).toBe(request?.formatted)
+    expect(adjusted?.primaryEntries.find((entry) => entry.unit === 'token')?.formatted).not.toBe(
+      thousand?.primaryEntries.find((entry) => entry.unit === 'token')?.formatted
+    )
     expect(request?.value).toBe(0.01)
     expect(request?.formatted).toBe(
       million?.primaryEntries.find((entry) => entry.unit === 'request')
@@ -242,7 +247,7 @@ describe('task dynamic pricing', () => {
     assert.equal(summary.tier?.label, 'std')
     assert.equal(summary.primaryEntries[0]?.value, 0.4)
     assert.equal(summary.primaryEntries[0]?.unit, 'second')
-    assert.match(summary.primaryEntries[0]?.formatted ?? '', /0[.,]4/)
+    assert.equal(summary.primaryEntries[0]?.formatted, '$0.8')
   })
 
   test('falls back for a non-canonical task expression', () => {
@@ -276,10 +281,8 @@ describe('task dynamic pricing', () => {
     const summary = getDynamicPricingSummary(model, summaryOptions)
 
     assert.ok(summary)
-    assert.match(summary.primaryEntries[0]?.formattedRange ?? '', /0[.,]4/)
-    assert.match(summary.primaryEntries[0]?.formattedRange ?? '', /0[.,]8/)
-    assert.match(summary.primaryEntries[0]?.formattedRange ?? '', /\S – \S/)
-    assert.match(summary.primaryEntries[0]?.formatted ?? '', /0[.,]4/)
+    assert.equal(summary.primaryEntries[0]?.formattedRange, '$0.8 – $1.6')
+    assert.equal(summary.primaryEntries[0]?.formatted, '$0.8')
   })
 
   test('omits a task price range when every tier has the same unit price', () => {
@@ -547,6 +550,17 @@ describe('task dynamic pricing', () => {
     assert.match(example.formatted, /1[.,]0584/)
   })
 
+  test('adjusts only token usage in an example with a fixed charge', () => {
+    const model = pricingModel({
+      billing_mode: 'tiered_expr',
+      billing_expr: 'tier("base", 2 + u("tokens") * 10 / 1000000)',
+      billing_usage_schema: { tokens: { type: 'number', unit: 'token' } },
+      billing_usage_examples: [{ label: 'Mixed', facts: { tokens: 100000 } }],
+    })
+    expect(getCardExamplePrice(model, summaryOptions)?.formatted).toBe('$5')
+    expect(getCardExamplePrice(model, { ...summaryOptions, showRechargePrice: false })?.formatted).toBe('$6')
+  })
+
   test('returns null when the expression is not canonical or examples are missing', () => {
     const schema = {
       tokens: { type: 'number' as const, unit: 'token' as const },
@@ -703,7 +717,7 @@ describe('shared plugin price summaries', () => {
       field: 'seconds',
       minValue: 0.4,
       maxValue: 1.2,
-      formattedRange: '$0.4 – $1.2',
+      formattedRange: '$0.8 – $2.4',
       unit: 'second',
     })
   })
@@ -793,7 +807,7 @@ describe('shared plugin price summaries', () => {
     ).toEqual(['credits', 'images'])
     expect(getCardExamplePrice(model, summaryOptions)).toEqual({
       label: 'Beta sample',
-      formatted: '$3',
+      formatted: '$6',
     })
   })
 })

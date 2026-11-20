@@ -384,8 +384,8 @@ describe('task visual pricing preview', () => {
         ]
       ),
       [
-        { label: '720p · 5s', total: (108000 * 9.8) / 1_000_000 },
-        { label: '1080p · 5s', total: (243000 * 9.8) / 1_000_000 },
+        { label: '720p · 5s', total: (108000 * 9.8) / 1_000_000, tokenTotal: (108000 * 9.8) / 1_000_000 },
+        { label: '1080p · 5s', total: (243000 * 9.8) / 1_000_000, tokenTotal: (243000 * 9.8) / 1_000_000 },
       ]
     )
   })

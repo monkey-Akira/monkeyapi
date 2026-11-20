@@ -239,9 +239,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         <span className='font-mono text-sm font-semibold tabular-nums'>
           {formatRequestPrice(
             props.model,
-            showRechargePrice,
-            priceRate,
-            usdExchangeRate,
             props.selectedGroup
           )}
           <span className='text-muted-foreground text-xs font-normal'>

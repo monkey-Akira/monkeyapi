@@ -300,7 +300,7 @@ describe('model cards', () => {
     )
   })
 
-  it('shows a per-request price with the selected group and recharge multiplier without a token unit', () => {
+  it('keeps the selected group per-request price when recharge display is enabled', () => {
     render(
       <ModelCard
         model={pricingModel({ quota_type: 1, model_price: 0.4 })}
@@ -312,7 +312,7 @@ describe('model cards', () => {
         tokenUnit='K'
       />
     )
-    expect(screen.getByText(/\$0.6/)).toHaveTextContent(/\$0.6\s*\/\s*request/)
+    expect(screen.getByText(/\$1\.2/)).toHaveTextContent(/\$1\.2\s*\/\s*request/)
     expect(screen.queryByText(/1K|1M/)).not.toBeInTheDocument()
     expect(screen.getAllByText('Per Request')).toHaveLength(1)
     expect(screen.queryByText('Per-request')).not.toBeInTheDocument()
