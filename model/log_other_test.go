@@ -69,6 +69,21 @@ func TestLogOtherRejectsSensitivePublicFields(t *testing.T) {
 	require.JSONEq(t, `{}`, NewLogOther().JSONString())
 }
 
+func TestResponseModelsInLogViews(t *testing.T) {
+	stored := `{"model_price":2,"response_model":{"returned_model":"observed"},"upstream_model_name":"mapped","is_model_mapped":true}`
+	userLogs := []*Log{{Other: stored}}
+	formatUserLogs(userLogs, 0)
+	require.JSONEq(t, `{"model_price":2}`, userLogs[0].Other)
+
+	adminLogs := []*Log{{Other: stored}}
+	FormatAdminLogs(adminLogs)
+	require.JSONEq(t, stored, adminLogs[0].Other)
+
+	rootLogs := []*Log{{Other: stored}}
+	FormatRootLogs(rootLogs)
+	require.JSONEq(t, stored, rootLogs[0].Other)
+}
+
 func TestLogOtherJSONStringDoesNotMutateReceiver(t *testing.T) {
 	other := NewLogOther()
 	require.True(t, other.SetPublic("request_path", "/v1/chat/completions"))

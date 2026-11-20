@@ -78,7 +78,8 @@ function makeLog(other: LogOtherData): UsageLog {
 function renderDetails(
   other: LogOtherData,
   promptTokens = 0,
-  completionTokens = 0
+  completionTokens = 0,
+  isAdmin = false
 ): QueryClient {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -99,7 +100,7 @@ function renderDetails(
           prompt_tokens: promptTokens,
           completion_tokens: completionTokens,
         }}
-        isAdmin={false}
+        isAdmin={isAdmin}
         isRoot={false}
         open
         onOpenChange={() => undefined}
@@ -113,14 +114,23 @@ function rowValue(label: string): string | null {
   return screen.getByText(label).nextElementSibling?.textContent ?? null
 }
 
-test('shows the recorded request and response models in log details', () => {
-  const queryClient = renderDetails({
-    response_model: {
-      requested_model: 'requested-model',
-      upstream_model: 'mapped-model',
-      returned_model: 'unexpected-model',
-    },
-  })
+const modelObservation = {
+  response_model: {
+    requested_model: 'requested-model',
+    upstream_model: 'mapped-model',
+    returned_model: 'unexpected-model',
+  },
+}
+
+test('hides recorded response and upstream models in personal log details', () => {
+  const queryClient = renderDetails(modelObservation)
+  expect(screen.queryByText(/unexpected-model/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/mapped-model/)).not.toBeInTheDocument()
+  queryClient.clear()
+})
+
+test('shows the recorded request and response models in admin log details', () => {
+  const queryClient = renderDetails(modelObservation, 0, 0, true)
   expect(screen.getByText('Response model: unexpected-model')).toBeVisible()
   expect(rowValue('Request Model')).toBe('requested-model')
   expect(rowValue('Upstream Model')).toBe('mapped-model')

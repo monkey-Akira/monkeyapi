@@ -38,12 +38,11 @@ import {
   isDisplayableLogType,
   isTimingLogType,
 } from '../lib/utils'
-import { ModelBadge, ResponseModelDetails } from './model-badge'
+import { ModelBadge } from './model-badge'
 import { StreamTpsCell, TimingMetricsCell } from './timing-metrics-cell'
 import { useUsageLogsContext } from './usage-logs-provider'
 
 type FieldName =
-  | 'model'
   | 'cost'
   | 'user'
   | 'channel'
@@ -77,11 +76,6 @@ export function CommonLogMobileCard<TData>(props: {
       ? other.user_group_ratio
       : other?.group_ratio
   const fields: Record<FieldName, LogField> = {
-    model: {
-      label: t('Model'),
-      value: model.name,
-      visible: displayable && props.cells.has('model_name') && !!model.name,
-    },
     cost: {
       label: t('Cost'),
       value: formatLogQuota(log.quota),
@@ -144,15 +138,9 @@ export function CommonLogMobileCard<TData>(props: {
   return (
     <div className='min-w-0 space-y-2.5 text-sm leading-5'>
       <div className='flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2'>
-        {fields.model.visible && (
+        {displayable && props.cells.has('model_name') && !!model.name && (
           <div className='min-w-0 flex-[1_1_10rem]'>
-            <ModelBadge
-              modelName={model.name}
-              actualModel={model.actualModel}
-              responseModel={model.responseModel}
-              wrapText
-              onInspect={() => setSelectedField('model')}
-            />
+            <ModelBadge modelName={model.name} wrapText />
           </div>
         )}
         {fields.cost.visible && costCell && (
@@ -351,20 +339,6 @@ export function CommonLogMobileCard<TData>(props: {
             <p className='bg-muted rounded-lg p-4 text-base [overflow-wrap:anywhere] whitespace-pre-wrap'>
               {activeField.value}
             </p>
-            {selectedField === 'model' && model.responseModel && (
-              <ResponseModelDetails observation={model.responseModel} />
-            )}
-            {selectedField === 'model' &&
-              !model.responseModel &&
-              model.actualModel && (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground'>{t('Actual Model')}</p>
-                  <p className='text-base [overflow-wrap:anywhere]'>
-                    {model.actualModel}
-                  </p>
-                  <CopyButton value={model.actualModel} />
-                </div>
-              )}
             {selectedField === 'channel' && channelCell && (
               <div>
                 {flexRender(

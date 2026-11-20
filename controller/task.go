@@ -484,6 +484,11 @@ func tasksToDto(tasks []*model.Task, fillUser bool, viewerRole int) []*dto.TaskD
 				item.AdminInfo = adminInfo
 			}
 		}
+		if viewerRole < common.RoleAdminUser {
+			properties := task.Properties
+			properties.UpstreamModelName = ""
+			item.Properties = properties
+		}
 		if viewerRole >= common.RoleRootUser {
 			rootInfo := &dto.TaskRootInfo{
 				UpstreamTaskID: task.PrivateData.UpstreamTaskID,

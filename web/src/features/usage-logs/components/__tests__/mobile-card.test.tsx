@@ -97,7 +97,7 @@ function renderLogs(props: Parameters<typeof Fixture>[0] = {}) {
   )
 }
 
-it('shows model mismatch evidence when tapping the mobile model badge', async () => {
+it('keeps mismatched response models out of the list and copies the requested name', async () => {
   const user = userEvent.setup()
   renderLogs({
     logs: [
@@ -113,17 +113,11 @@ it('shows model mismatch evidence when tapping the mobile model badge', async ()
       },
     ],
   })
-  await user.click(
-    screen.getByRole('button', {
-      name: `Model: ${longName}, Response model: unexpected-model`,
-    })
-  )
-  const dialog = await screen.findByRole('dialog', { name: 'Model' })
-  expect(
-    within(dialog).getByText('Response model: unexpected-model')
-  ).toBeVisible()
-  expect(within(dialog).getByText('mapped-model')).toBeVisible()
-  expect(within(dialog).getByText('unexpected-model')).toBeVisible()
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  expect(screen.queryByText(/unexpected-model/)).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: `Model: ${longName}` }))
+  expect(copy).toHaveBeenCalledWith(longName)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 it('opens long channel text on tap and copies the complete value', async () => {
@@ -303,7 +297,7 @@ it('labels a task whose result was returned in the response as synchronous', () 
   expect(screen.queryByText('Async')).not.toBeInTheDocument()
 })
 
-it('shows mapped model names in full when inspecting a mobile model badge', async () => {
+it('keeps mapped model names out of the model badge', async () => {
   const user = userEvent.setup()
   renderLogs({
     logs: [
@@ -318,13 +312,8 @@ it('shows mapped model names in full when inspecting a mobile model badge', asyn
     ],
   })
   await user.click(screen.getByRole('button', { name: `Model: ${longName}` }))
-  const dialog = await screen.findByRole('dialog', { name: 'Model' })
-  expect(within(dialog).getByText('Actual Model')).toBeVisible()
-  expect(
-    within(dialog).getByText(
-      'provider-production-mapped-model-with-a-long-name'
-    )
-  ).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByText('provider-production-mapped-model-with-a-long-name')).not.toBeInTheDocument()
 })
 
 it('shows loading placeholders without displaying stale log fields', () => {
