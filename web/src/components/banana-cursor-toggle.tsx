@@ -2,7 +2,7 @@ import { Ban } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import bananaCursorUrl from '@/assets/banana-cursor.svg'
+import bananaCursorUrl from '@/assets/banana-cursor.png'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,

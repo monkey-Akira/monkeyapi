@@ -141,7 +141,7 @@ For commercial licensing, please contact support@quantumnous.com
 @media (hover: hover) and (pointer: fine) {
   html[data-cursor-style='banana'] body,
   html[data-cursor-style='banana'] body * {
-    cursor: url('../assets/banana-cursor.svg') 6 2, auto;
+    cursor: url('../assets/banana-cursor.png') 4 3, auto;
   }
 
   html[data-cursor-style='banana'] input,
@@ -162,7 +162,7 @@ For commercial licensing, please contact support@quantumnous.com
 
   html[data-cursor-style='banana'] body button:not(:disabled),
   html[data-cursor-style='banana'] body [role='button']:not(:disabled) {
-    cursor: url('../assets/banana-cursor.svg') 6 2, auto;
+    cursor: url('../assets/banana-cursor.png') 4 3, auto;
   }
 
   html[data-cursor-style='banana'] body .cursor-grab {
